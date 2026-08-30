@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.2.0",
+  "suppressions": [
+    {
+      "finding_id": "EXAMPLE-FINDING-ID",
+      "justification": "Confirmed false positive in generated code; tracked by project issue 123.",
+      "owner": "mobile-platform-team",
+      "expires_at": "2026-12-31",
+      "rule_version": "ASPA-EXAMPLE-001@2026-08-30"
+    }
+  ]
+}

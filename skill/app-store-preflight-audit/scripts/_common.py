@@ -44,16 +44,54 @@ def relpath(path: Path, root: Path) -> str:
         return path.name
 
 
-def iter_files(root: Path, *, max_size: int = 2_000_000) -> Iterator[Path]:
+class ScanLimitExceeded(RuntimeError):
+    """Raised when a collector exceeds its explicit, user-visible scan budget."""
+
+
+def ensure_within(path: Path, root: Path) -> Path:
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as error:
+        raise ValueError(f"path escapes scan root: {path}") from error
+    return resolved
+
+
+def iter_files(root: Path, *, max_size: int = 2_000_000,
+               max_files: int = 50_000, max_total_size: int = 500_000_000) -> Iterator[Path]:
+    """Yield regular, non-symlink files under root within a deterministic budget."""
+    root = root.resolve()
+    count = 0
+    total_size = 0
     for current, dirs, files in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_DIRS)
+        safe_dirs = []
+        for name in sorted(d for d in dirs if d not in EXCLUDED_DIRS):
+            candidate = Path(current) / name
+            try:
+                if candidate.is_symlink():
+                    continue
+                ensure_within(candidate, root)
+            except (OSError, ValueError):
+                continue
+            safe_dirs.append(name)
+        dirs[:] = safe_dirs
         for name in sorted(files):
             path = Path(current) / name
             try:
-                if path.is_symlink() or path.stat().st_size > max_size:
+                if path.is_symlink():
                     continue
+                ensure_within(path, root)
+                size = path.stat().st_size
             except OSError:
                 continue
+            if size > max_size:
+                continue
+            count += 1
+            total_size += size
+            if count > max_files:
+                raise ScanLimitExceeded(f"file count exceeded limit ({max_files})")
+            if total_size > max_total_size:
+                raise ScanLimitExceeded(f"total readable bytes exceeded limit ({max_total_size})")
             yield path
 
 
@@ -170,7 +208,7 @@ def add_finding(fragment: dict[str, Any], finding_id: str, severity: str,
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary.write_text(json.dumps(redact(value), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     temporary.replace(path)
 
 
@@ -181,6 +219,11 @@ SECRET_PATTERNS = [
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
 ]
 
+ABSOLUTE_PATH_PATTERNS = [
+    re.compile(r"(?<![A-Za-z0-9_.-])/(?:Users|home)/[^\s\"'<>]+"),
+    re.compile(r"(?<![A-Za-z0-9_.-])/(?:private/)?(?:tmp|var/folders)/[^\s\"'<>]+"),
+]
+
 
 def redact_text(value: str) -> str:
     redacted = value
@@ -189,6 +232,8 @@ def redact_text(value: str) -> str:
             redacted = pattern.sub(lambda match: match.group(1) + "[REDACTED]", redacted)
         else:
             redacted = pattern.sub("[REDACTED]", redacted)
+    for pattern in ABSOLUTE_PATH_PATTERNS:
+        redacted = pattern.sub("<PATH>", redacted)
     return redacted
 
 

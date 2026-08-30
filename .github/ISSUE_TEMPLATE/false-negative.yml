@@ -1,0 +1,24 @@
+name: False negative / 漏报
+description: Report a risk that the scanner missed.
+title: "[False negative] "
+labels: ["false-negative"]
+body:
+  - type: input
+    id: version
+    attributes: {label: Version, placeholder: v0.2.0-beta}
+    validations: {required: true}
+  - type: textarea
+    id: missed
+    attributes: {label: Missed risk, description: Explain the observable condition and expected finding.}
+    validations: {required: true}
+  - type: textarea
+    id: reproduction
+    attributes: {label: Minimal redacted reproduction}
+    validations: {required: true}
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed personal, project, credential, and proprietary information.
+          required: true

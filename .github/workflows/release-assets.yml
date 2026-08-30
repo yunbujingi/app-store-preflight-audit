@@ -11,7 +11,7 @@ jobs:
   package:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.release.tag_name }}
       - name: Test and evaluate
@@ -32,5 +32,4 @@ jobs:
         run: |
           gh release upload "${{ github.event.release.tag_name }}" \
             dist/app-store-preflight-audit.zip \
-            dist/app-store-preflight-audit.zip.sha256 \
-            --clobber
+            dist/app-store-preflight-audit.zip.sha256

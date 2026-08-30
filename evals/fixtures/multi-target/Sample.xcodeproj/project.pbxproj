@@ -1,9 +1,70 @@
-// Synthetic target inventory fixture; it is not intended to build.
-isa = PBXNativeTarget;
-name = SampleApp;
-isa = PBXNativeTarget;
-name = SampleWidget;
-isa = PBXNativeTarget;
-name = SampleWatch;
-isa = PBXNativeTarget;
-name = SampleShare;
+// !$*UTF8*$!
+{
+	objects = {
+/* Begin PBXBuildFile section */
+		B10000000000000000000001 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* Extensions.swift */; };
+		B10000000000000000000002 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* Extensions.swift */; };
+		B10000000000000000000003 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* Extensions.swift */; };
+		B10000000000000000000004 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* Extensions.swift */; };
+		B10000000000000000000005 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* PrivacyInfo.xcprivacy */; };
+/* End PBXBuildFile section */
+/* Begin PBXFileReference section */
+		F10000000000000000000001 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Extensions.swift; sourceTree = SOURCE_ROOT; };
+		F10000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Sources/PrivacyInfo.xcprivacy; sourceTree = SOURCE_ROOT; };
+		F10000000000000000000011 /* SampleApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SampleApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000012 /* SampleWidget.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; path = SampleWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000013 /* SampleWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = SampleWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000014 /* SampleShare.appex */ = {isa = PBXFileReference; explicitFileType = wrapper.app-extension; path = SampleShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+/* Begin PBXSourcesBuildPhase section */
+		P10000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = ( B10000000000000000000001 /* Extensions.swift in Sources */, );
+		};
+		P10000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = ( B10000000000000000000002 /* Extensions.swift in Sources */, );
+		};
+		P10000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = ( B10000000000000000000003 /* Extensions.swift in Sources */, );
+		};
+		P10000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = ( B10000000000000000000004 /* Extensions.swift in Sources */, );
+		};
+/* End PBXSourcesBuildPhase section */
+/* Begin PBXResourcesBuildPhase section */
+		P10000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = ( B10000000000000000000005 /* PrivacyInfo.xcprivacy in Resources */, );
+		};
+/* End PBXResourcesBuildPhase section */
+/* Begin PBXNativeTarget section */
+		T10000000000000000000001 /* SampleApp */ = {
+			isa = PBXNativeTarget;
+			buildPhases = ( P10000000000000000000001 /* Sources */, P10000000000000000000005 /* Resources */, );
+			name = SampleApp;
+			productReference = F10000000000000000000011 /* SampleApp.app */;
+		};
+		T10000000000000000000002 /* SampleWidget */ = {
+			isa = PBXNativeTarget;
+			buildPhases = ( P10000000000000000000002 /* Sources */, );
+			name = SampleWidget;
+			productReference = F10000000000000000000012 /* SampleWidget.appex */;
+		};
+		T10000000000000000000003 /* SampleWatch */ = {
+			isa = PBXNativeTarget;
+			buildPhases = ( P10000000000000000000003 /* Sources */, );
+			name = SampleWatch;
+			productReference = F10000000000000000000013 /* SampleWatch.app */;
+		};
+		T10000000000000000000004 /* SampleShare */ = {
+			isa = PBXNativeTarget;
+			buildPhases = ( P10000000000000000000004 /* Sources */, );
+			name = SampleShare;
+			productReference = F10000000000000000000014 /* SampleShare.appex */;
+		};
+/* End PBXNativeTarget section */
+	};
+}

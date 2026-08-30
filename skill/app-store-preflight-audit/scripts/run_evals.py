@@ -14,7 +14,8 @@ from typing import Any
 
 from _common import SCHEMA_VERSION, utc_now, write_json
 
-COLLECTORS = {"project_inventory.py", "inspect_privacy_manifests.py"}
+COLLECTORS = {"project_inventory.py", "inspect_privacy_manifests.py", "inspect_target_graph.py"}
+ALLOWED_COLLECTOR_ARGS = {"--project", "--workspace", "--metadata-dir", "--configuration"}
 OUTCOMES = {"tp", "tn", "fp", "fn", "unknown", "blocked"}
 
 
@@ -97,8 +98,16 @@ def main() -> int:
             output = Path(temporary) / f"{case['id']}.json"
             collector_error = None
             try:
+                extra = case.get("collector_args", [])
+                if not isinstance(extra, list) or not all(isinstance(item, str) for item in extra):
+                    raise ValueError("collector_args must be an array of strings")
+                for index, item in enumerate(extra):
+                    if item.startswith("--") and item not in ALLOWED_COLLECTOR_ARGS:
+                        raise ValueError(f"unsupported collector argument: {item}")
+                    if not item.startswith("--") and index == 0:
+                        raise ValueError("collector_args must start with an allowed option")
                 completed = subprocess.run(
-                    [sys.executable, str(scripts / collector), "--root", str(fixture), "--output", str(output)],
+                    [sys.executable, str(scripts / collector), "--root", str(fixture), *extra, "--output", str(output)],
                     check=False, capture_output=True, text=True, timeout=60,
                 )
                 if completed.returncode != 0:

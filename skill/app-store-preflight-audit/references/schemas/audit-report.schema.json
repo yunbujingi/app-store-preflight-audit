@@ -3,7 +3,7 @@
   "$id": "https://example.invalid/app-store-preflight/audit-report.schema.json",
   "title": "App Store preflight audit report",
   "type": "object",
-  "required": ["schema_version", "schema_compatibility", "title", "generated_at", "verdict", "scope", "coverage", "checks", "findings", "fragments"],
+  "required": ["schema_version", "schema_compatibility", "title", "generated_at", "verdict", "scope", "coverage", "checks", "findings", "triage", "fragments"],
   "additionalProperties": false,
   "properties": {
     "schema_version": {"const": "0.2.0"},
@@ -59,6 +59,36 @@
     },
     "checks": {"type": "array", "items": {"$ref": "#/$defs/check"}},
     "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "triage": {
+      "type": "object",
+      "required": ["baseline_used", "new", "changed", "unchanged", "resolved", "suppressed", "expired_suppressions"],
+      "additionalProperties": false,
+      "properties": {
+        "baseline_used": {"type": "boolean"},
+        "new": {"type": "array", "items": {"$ref": "#/$defs/findingIdentity"}},
+        "changed": {"type": "array", "items": {"$ref": "#/$defs/findingIdentity"}},
+        "unchanged": {"type": "array", "items": {"$ref": "#/$defs/findingIdentity"}},
+        "resolved": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "suppressed": {
+          "type": "array",
+          "items": {
+            "allOf": [{"$ref": "#/$defs/findingIdentity"}],
+            "properties": {
+              "justification": {"type": "string"}, "owner": {"type": "string"},
+              "expires_at": {"type": "string", "format": "date"}, "rule_version": {"type": "string"}
+            },
+            "required": ["id", "fingerprint", "justification", "owner", "expires_at", "rule_version"]
+          }
+        },
+        "expired_suppressions": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["id", "expires_at"], "additionalProperties": false,
+            "properties": {"id": {"type": "string"}, "expires_at": {"type": "string", "format": "date"}}
+          }
+        }
+      }
+    },
     "fragments": {
       "type": "array",
       "items": {
@@ -74,6 +104,10 @@
     }
   },
   "$defs": {
+    "findingIdentity": {
+      "type": "object", "required": ["id", "fingerprint"], "additionalProperties": true,
+      "properties": {"id": {"type": "string"}, "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+    },
     "layer": {"enum": ["source", "policy", "build", "unit_test", "ui_test", "archive", "runtime", "app_store_connect"]},
     "disposition": {"enum": ["PASS", "FAIL", "N/A", "NOT_RUN", "NEEDS_VERIFY", "BLOCKED"]},
     "verification": {"enum": ["CONFIRMED", "INFERRED", "UNRESOLVED"]},

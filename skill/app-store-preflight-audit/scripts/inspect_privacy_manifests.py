@@ -8,7 +8,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from _common import add_check, add_finding, iter_files, new_fragment, read_plist, read_text, relpath, strip_source_comments, write_json
+from _common import ScanLimitExceeded, add_check, add_finding, iter_files, new_fragment, read_plist, read_text, relpath, strip_source_comments, write_json
 
 PRIVACY_KEYS = {
     "NSPrivacyTracking", "NSPrivacyTrackingDomains", "NSPrivacyCollectedDataTypes",
@@ -28,6 +28,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--max-files", type=int, default=50_000)
+    parser.add_argument("--max-total-size", type=int, default=500_000_000)
+    parser.add_argument("--max-file-size", type=int, default=2_000_000)
     return parser.parse_args()
 
 
@@ -41,7 +44,15 @@ def main() -> int:
     declarations: dict[str, list[str]] = defaultdict(list)
     signals: dict[str, list[dict[str, object]]] = defaultdict(list)
 
-    files = list(iter_files(root))
+    if min(args.max_files, args.max_total_size, args.max_file_size) <= 0:
+        raise SystemExit("scan limits must be positive")
+    try:
+        files = list(iter_files(
+            root, max_size=args.max_file_size,
+            max_files=args.max_files, max_total_size=args.max_total_size,
+        ))
+    except ScanLimitExceeded as error:
+        raise SystemExit(f"scan budget exceeded: {error}") from error
     for path in files:
         if path.name == "PrivacyInfo.xcprivacy":
             relative = relpath(path, root)
@@ -121,6 +132,10 @@ def main() -> int:
         "manifests": manifests,
         "declared_required_reason_categories": {key: sorted(set(value)) for key, value in sorted(declarations.items())},
         "required_reason_api_signals": dict(sorted(signals.items())),
+        "scan_budget": {
+            "max_files": args.max_files, "max_total_size": args.max_total_size,
+            "max_file_size": args.max_file_size, "files_readable": len(files),
+        },
     }
     if manifests and all(item["valid"] for item in manifests):
         add_check(fragment, "PRIVACY-001", "PASS", "All discovered privacy manifests parsed successfully.")

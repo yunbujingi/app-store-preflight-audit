@@ -14,3 +14,5 @@ Each expectation has a stable `rule_id` and produces one of:
 Precision, recall, false-positive rate, and per-rule counts are descriptive quality metrics, not App Store approval probabilities. The default CI gate requires zero false positives, false negatives, and blocked expectations in bundled deterministic fixtures. Add a focused negative control whenever a broad pattern is introduced.
 
 Use stable JSON for downstream logic, SARIF for code-scanning presentation, and JUnit for test dashboards. Preserve the distinctions between failure, unresolved, blocked, and not run.
+
+For recurring projects, compare against a prior canonical JSON report. PR presentation should prioritize `triage.new` and `triage.changed`, show resolved findings separately, and keep unchanged findings available without repeating them as new noise. Read [baseline-and-suppression.md](baseline-and-suppression.md) before accepting an exception.

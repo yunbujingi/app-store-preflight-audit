@@ -47,6 +47,17 @@
       ]
     },
     {
+      "id": "target-graph-membership",
+      "collector": "inspect_target_graph.py",
+      "fixture": "fixtures/multi-target",
+      "collector_args": ["--project", "Sample.xcodeproj", "--metadata-dir", "metadata", "--configuration", "Release"],
+      "expectations": [
+        {"kind": "check_state", "rule_id": "TARGET-GRAPH-001", "disposition": "PASS"},
+        {"kind": "check_state", "rule_id": "TARGET-GRAPH-002", "disposition": "PASS"},
+        {"kind": "check_state", "rule_id": "TARGET-GRAPH-003", "disposition": "PASS"}
+      ]
+    },
+    {
       "id": "regional-commerce-signals",
       "collector": "project_inventory.py",
       "fixture": "fixtures/regional-commerce",

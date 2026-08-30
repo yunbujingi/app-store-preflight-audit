@@ -4,7 +4,7 @@
 
 An unofficial, evidence-driven Codex skill for auditing Apple-platform apps before App Store submission.
 
-Latest published release: `v0.1.0-beta`. Development target: `v0.2.0-beta`.
+Latest published release: `v0.2.0-beta`.
 
 It separates source inspection, isolated Xcode execution, archive inspection, runtime review, and App Store Connect verification. It produces machine-readable evidence and a concise human report without treating a successful build as proof of approval.
 
@@ -14,13 +14,17 @@ It separates source inspection, isolated Xcode execution, archive inspection, ru
 
 - Progressive skill instructions that load only applicable policy and workflow references.
 - Source, build, archive, and submission audit modes with explicit coverage states.
+- A stable target graph from PBX source/resource phases plus optional `xcodebuild` list/build-setting evidence.
 - A two-axis evidence model: verification state and impact severity.
 - Isolated Xcode command planning/execution with Git before/after checks.
 - Privacy manifest and required-reason API evidence collection.
-- Archive-level bundle, extension, framework, entitlement, and manifest inventory.
+- Archive-level `.xcarchive`, exported bundle, and safety-limited `.ipa` inspection.
 - Mach-O, dynamic dependency, signature, and bundle-local required-reason cross-checks without executing app code.
+- Parent/child ID, version, platform, architecture, embedded-profile, debug-resource, static-library, and Xcode Privacy Report evidence.
 - Stable JSON Schema plus Markdown, SARIF 2.1.0, and JUnit output.
-- Hash-only Apple policy freshness/change records with storefront and platform scope.
+- A rule-level Apple policy registry with stable IDs, applicability, fingerprints, review versions, and related evals.
+- Read-only local App Store Connect export import and archive identity comparison.
+- Baseline finding diffs and accountable, expiring suppressions that remain visible in canonical JSON.
 - Non-mutating Simulator scenario plans and normalized direct observations.
 - Reproducible fixtures, per-rule TP/TN/FP/FN metrics, and zero-regression CI gates.
 - Deterministic Skill packaging and a dry-run-first, no-overwrite installer.
@@ -51,6 +55,8 @@ $app-store-preflight-audit perform a full preflight audit. Do not modify the rep
 ```
 
 The skill does not submit builds, change App Store Connect metadata, purchase products, reset simulators, or repair findings unless separately authorized.
+
+This beta is intentionally being released for community validation. Please use the dedicated issue forms for [false positives](.github/ISSUE_TEMPLATE/false-positive.yml), [false negatives](.github/ISSUE_TEMPLATE/false-negative.yml), [Apple rule changes](.github/ISSUE_TEMPLATE/apple-rule-change.yml), and [new project shapes](.github/ISSUE_TEMPLATE/new-project-shape.yml). Submit only synthetic or fully redacted evidence.
 
 ## Development
 

@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Run dependency-free tests
         run: python3 -m unittest discover -s tests -v
       - name: Compile Python helpers
@@ -20,6 +20,15 @@ jobs:
         run: |
           python3 skill/app-store-preflight-audit/scripts/run_evals.py \
             --cases evals/cases.json --output /tmp/app-store-preflight-evals.json
+      - name: Validate target graph and policy registry
+        run: |
+          python3 skill/app-store-preflight-audit/scripts/inspect_target_graph.py \
+            --root evals/fixtures/multi-target --project Sample.xcodeproj \
+            --metadata-dir evals/fixtures/multi-target/metadata \
+            --configuration Release --output /tmp/app-store-preflight-target-graph.json
+          python3 skill/app-store-preflight-audit/scripts/validate_rule_registry.py \
+            --registry skill/app-store-preflight-audit/references/policy-registry.json \
+            --output /tmp/app-store-preflight-policy-registry.json
       - name: Verify deterministic package
         run: |
           mkdir -p dist
@@ -33,7 +42,7 @@ jobs:
           cmp dist/app-store-preflight-audit.zip /tmp/app-store-preflight-audit-second.zip
       - name: Check scaffold placeholders
         run: '! grep -R "\[TODO" skill/app-store-preflight-audit'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: app-store-preflight-audit-skill
           path: |

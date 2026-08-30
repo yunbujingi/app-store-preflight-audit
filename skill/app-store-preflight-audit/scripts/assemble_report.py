@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -12,7 +13,7 @@ from typing import Any
 
 from _common import (
     DISPOSITIONS, LAYERS, SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS,
-    redact, utc_now, write_json,
+    redact, sha256_bytes, utc_now, write_json,
 )
 
 SEVERITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3, "P4": 4}
@@ -29,6 +30,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--title", default="App Store Preflight Audit")
     parser.add_argument("--policy-source", action="append", nargs=2, metavar=("URL", "RETRIEVED_AT"), default=[])
     parser.add_argument("--storefront", action="append", default=[])
+    parser.add_argument("--baseline", type=Path, help="Prior stable audit JSON used for finding diff")
+    parser.add_argument("--suppressions", type=Path, help="Reviewed suppression registry JSON")
     return parser.parse_args()
 
 
@@ -74,6 +77,76 @@ def deduplicate(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(by_id.values(), key=lambda item: (SEVERITY_ORDER[item["severity"]], item["id"]))
 
 
+def finding_fingerprint(finding: dict[str, Any]) -> str:
+    normalized = {
+        "id": finding.get("id"), "severity": finding.get("severity"),
+        "disposition": finding.get("disposition"), "verification": finding.get("verification"),
+        "category": finding.get("category"), "title": finding.get("title"),
+        "evidence": sorted(
+            ({key: item.get(key) for key in ("path", "line", "pattern", "detail") if key in item}
+             for item in finding.get("evidence", [])),
+            key=lambda item: json.dumps(item, sort_keys=True),
+        ),
+    }
+    return sha256_bytes(json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def load_suppressions(path: Path | None) -> list[dict[str, Any]]:
+    if not path:
+        return []
+    value = json.loads(path.resolve().read_text(encoding="utf-8"))
+    entries = value.get("suppressions") if isinstance(value, dict) else None
+    if not isinstance(entries, list):
+        raise ValueError("suppression file must contain a suppressions array")
+    for index, item in enumerate(entries):
+        required = {"justification", "owner", "expires_at", "rule_version"}
+        if not isinstance(item, dict) or not required.issubset(item) or not (item.get("finding_id") or item.get("fingerprint")):
+            raise ValueError(f"suppression {index} is missing identity or review metadata")
+        dt.date.fromisoformat(item["expires_at"])
+    return entries
+
+
+def finding_triage(findings: list[dict[str, Any]], baseline_path: Path | None,
+                   suppression_path: Path | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    current = {item["id"]: finding_fingerprint(item) for item in findings}
+    baseline_by_id: dict[str, str] = {}
+    if baseline_path:
+        baseline = json.loads(baseline_path.resolve().read_text(encoding="utf-8"))
+        baseline_by_id = {item["id"]: finding_fingerprint(item) for item in baseline.get("findings", [])}
+    suppressions = load_suppressions(suppression_path)
+    today = dt.date.today()
+    suppressed = []
+    active = []
+    expired = []
+    for finding in findings:
+        fingerprint = current[finding["id"]]
+        match = next((item for item in suppressions if item.get("fingerprint") == fingerprint or item.get("finding_id") == finding["id"]), None)
+        if match and dt.date.fromisoformat(match["expires_at"]) >= today:
+            suppressed.append({
+                "id": finding["id"], "fingerprint": fingerprint,
+                "justification": match["justification"], "owner": match["owner"],
+                "expires_at": match["expires_at"], "rule_version": match["rule_version"],
+            })
+        else:
+            active.append(finding)
+            if match:
+                expired.append({"id": finding["id"], "expires_at": match["expires_at"]})
+    new = sorted(rule_id for rule_id in current if rule_id not in baseline_by_id)
+    changed = sorted(rule_id for rule_id in current if rule_id in baseline_by_id and current[rule_id] != baseline_by_id[rule_id])
+    unchanged = sorted(rule_id for rule_id in current if rule_id in baseline_by_id and current[rule_id] == baseline_by_id[rule_id])
+    resolved = sorted(rule_id for rule_id in baseline_by_id if rule_id not in current)
+    triage = {
+        "baseline_used": bool(baseline_path),
+        "new": [{"id": item, "fingerprint": current[item]} for item in new],
+        "changed": [{"id": item, "fingerprint": current[item]} for item in changed],
+        "unchanged": [{"id": item, "fingerprint": current[item]} for item in unchanged],
+        "resolved": resolved,
+        "suppressed": suppressed,
+        "expired_suppressions": expired,
+    }
+    return triage, active
+
+
 def verdict(findings: list[dict[str, Any]], checks: list[dict[str, Any]]) -> str:
     if any(item["severity"] == "P0" and item["disposition"] == "FAIL" for item in findings):
         return "NO_GO"
@@ -99,7 +172,11 @@ def markdown(report: dict[str, Any]) -> str:
     for layer, value in report["coverage"].items():
         coverage = f"{value['coverage_percent']}%" if value["applicable"] else "N/A"
         lines.append(f"| {layer} | {value['resolved']} | {value['applicable']} | {coverage} |")
-    lines += ["", "## Findings", ""]
+    triage = report.get("triage", {})
+    lines += ["", "## Finding diff", "",
+              f"New: {len(triage.get('new', []))}; changed: {len(triage.get('changed', []))}; "
+              f"unchanged: {len(triage.get('unchanged', []))}; suppressed: {len(triage.get('suppressed', []))}; "
+              f"resolved: {len(triage.get('resolved', []))}.", "", "## Findings", ""]
     if not report["findings"]:
         lines += ["No findings were generated within the collected evidence scope.", ""]
     else:
@@ -133,7 +210,10 @@ def markdown(report: dict[str, Any]) -> str:
 def sarif(report: dict[str, Any]) -> dict[str, Any]:
     rules = []
     results = []
+    suppressed_ids = {item["id"] for item in report.get("triage", {}).get("suppressed", [])}
     for finding in report["findings"]:
+        if finding["id"] in suppressed_ids:
+            continue
         rule_id = finding["id"]
         rule = {
             "id": rule_id,
@@ -180,7 +260,8 @@ def sarif(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def junit(report: dict[str, Any]) -> str:
-    items = [("check", item) for item in report["checks"]] + [("finding", item) for item in report["findings"]]
+    suppressed_ids = {item["id"] for item in report.get("triage", {}).get("suppressed", [])}
+    items = [("check", item) for item in report["checks"]] + [("finding", item) for item in report["findings"] if item["id"] not in suppressed_ids]
     failures = sum(1 for _, item in items if item["disposition"] == "FAIL")
     skipped = sum(1 for _, item in items if item["disposition"] in {"N/A", "NOT_RUN", "NEEDS_VERIFY", "BLOCKED"})
     suite = ET.Element("testsuite", {
@@ -225,6 +306,7 @@ def main() -> int:
             fragments.append(validate_fragment(json.load(handle), path))
     checks = [check for fragment in fragments for check in fragment.get("checks", [])]
     findings = deduplicate([finding for fragment in fragments for finding in fragment.get("findings", [])])
+    triage, active_findings = finding_triage(findings, args.baseline, args.suppressions)
     layer_counts: dict[str, dict[str, int]] = defaultdict(lambda: {"resolved": 0, "applicable": 0})
     for check in checks:
         layer = check["layer"]
@@ -245,7 +327,7 @@ def main() -> int:
         },
         "title": args.title,
         "generated_at": utc_now(),
-        "verdict": verdict(findings, checks),
+        "verdict": verdict(active_findings, checks),
         "scope": {
             "storefronts": sorted(set(args.storefront)),
             "policy_sources": policy_sources(fragments, args.policy_source),
@@ -253,6 +335,7 @@ def main() -> int:
         "coverage": coverage,
         "checks": checks,
         "findings": findings,
+        "triage": triage,
         "fragments": [{"tool": fragment["tool"], "layer": fragment["layer"], "generated_at": fragment["generated_at"]} for fragment in fragments],
     })
     write_json(args.json_output.resolve(), report)

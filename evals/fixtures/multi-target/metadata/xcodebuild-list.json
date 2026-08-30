@@ -1,0 +1,8 @@
+{
+  "project": {
+    "name": "Sample",
+    "targets": ["SampleApp", "SampleShare", "SampleWatch", "SampleWidget"],
+    "configurations": ["Debug", "Release"],
+    "schemes": ["SampleApp"]
+  }
+}

@@ -1,0 +1,26 @@
+name: New project shape / 新项目结构
+description: Propose support for an Xcode or archive layout not represented by current fixtures.
+title: "[Project shape] "
+labels: ["project-shape"]
+body:
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Layer
+      options: [Target graph, Archive or IPA, App Store Connect export, Runtime, Other]
+    validations: {required: true}
+  - type: textarea
+    id: shape
+    attributes: {label: Redacted structure, description: Include only the minimum file/tree and metadata shape needed to reproduce.}
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes: {label: Expected stable relationship or check}
+    validations: {required: true}
+  - type: checkboxes
+    id: permission
+    attributes:
+      label: Fixture permission
+      options:
+        - label: The submitted fixture is synthetic or licensed for inclusion in this Apache-2.0 project.
+          required: true

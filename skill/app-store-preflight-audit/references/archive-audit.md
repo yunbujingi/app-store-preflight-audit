@@ -1,6 +1,8 @@
 # Archive-level audit
 
-Repository inspection cannot establish final packaging. Use this reference for `.xcarchive`, exported `.app`, `.appex`, embedded framework, watch, widget, and other shipped bundles.
+Repository inspection cannot establish final packaging. Use this reference for `.xcarchive`, `.ipa`, exported `.app`, `.appex`, embedded framework, watch, widget, and other shipped bundles.
+
+Treat `.ipa` as an untrusted ZIP. Reject symlinks, absolute paths, `..` traversal, unsafe compression ratios, and artifacts exceeding configured file-count, per-file, or total-size budgets before inspection.
 
 ## Provenance
 
@@ -23,6 +25,8 @@ Inspect each packaged executable without launching it. Record Mach-O detection, 
 
 Check uniqueness and parent/child consistency of identifiers and versions. Separate missing evidence from confirmed mismatch.
 
+Import an Xcode-generated Privacy Report when supplied and fingerprint it. Compare its SDK/bundle identities with shipped bundles without copying arbitrary report content into public output.
+
 ## Privacy and SDK evidence
 
 - Parse every packaged privacy manifest.
@@ -42,8 +46,12 @@ Unsigned archives must be labeled `UNSIGNED_OR_UNVERIFIED`. Do not extrapolate u
 
 When entitlements are readable, cross-check `application-identifier` suffixes against bundle IDs and review parent/extension capability consistency. Never print signing identities, team member names, certificates, or provisioning payloads.
 
+Decode embedded provisioning profiles only through read-only platform tooling. Compare signed entitlement values with profile allowances, including wildcard semantics, and emit only entitlement keys and sanitized values.
+
 ## Resources and release integrity
 
 Inspect final Info.plist values, icons, launch resources, localizations, URL/document types, ATS settings, background modes, debug artifacts, environment endpoints, and packaged test/sample assets. Archive checks should prefer actual bundle contents over source-file presence.
+
+Compare parent/child version, bundle ID prefix, supported platform, architecture, minimum OS, and Mach-O build-version evidence. Missing tool output is a limitation; a confirmed incompatible pair is a finding. Record required-reason symbol evidence with its source executable and confidence.
 
 Never execute binaries from the archive.

@@ -21,6 +21,8 @@ This synthetic example demonstrates report shape only. It contains no real proje
 
 ## Findings
 
+Finding diff: 1 new; 0 changed; 0 unchanged; 0 suppressed; 0 resolved.
+
 | ID | Severity | Disposition | Verification | Title |
 | --- | --- | --- | --- | --- |
 | ARCHIVE-REASON-1 | P1 | NEEDS_VERIFY | INFERRED | Packaged binary API signal lacks a direct declaration |

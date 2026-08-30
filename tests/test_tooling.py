@@ -111,6 +111,50 @@ class ToolingTests(unittest.TestCase):
             self.assertEqual(dylib["containing_bundle"], "Products/Applications/Sample.app")
             self.assertIn("NSPrivacyAccessedAPICategorySystemBootTime", dylib["missing_required_reason_categories"])
 
+    def test_ipa_support_and_path_traversal_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            ipa = root / "Sample.ipa"
+            info = plistlib.dumps({
+                "CFBundleIdentifier": "org.example.Sample",
+                "CFBundleExecutable": "Sample",
+                "CFBundleShortVersionString": "1.0",
+                "CFBundleVersion": "1",
+                "CFBundleSupportedPlatforms": ["iPhoneOS"],
+            })
+            with zipfile.ZipFile(ipa, "w") as archive:
+                archive.writestr("Payload/Sample.app/Info.plist", info)
+                archive.writestr("Payload/Sample.app/Sample", b"\xcf\xfa\xed\xfe")
+            output = root / "ipa.json"
+            run_script("inspect_archive.py", "--archive", str(ipa), "--output", str(output), "--skip-binary-tools")
+            data = json.loads(output.read_text())
+            self.assertEqual(data["data"]["artifact_type"], "ipa")
+            self.assertEqual(data["data"]["summary"]["apps"], 1)
+            self.assertNotIn(str(root), output.read_text())
+
+            unsafe = root / "Unsafe.ipa"
+            with zipfile.ZipFile(unsafe, "w") as archive:
+                archive.writestr("../escaped", b"no")
+            result = run_script("inspect_archive.py", "--archive", str(unsafe), "--output", str(output), expect=1)
+            self.assertIn("safety validation failed", result.stderr)
+
+    def test_target_graph_uses_phase_membership_and_offline_build_settings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "graph.json"
+            fixture = FIXTURES / "multi-target"
+            run_script(
+                "inspect_target_graph.py", "--root", str(fixture), "--project", "Sample.xcodeproj",
+                "--metadata-dir", str(fixture / "metadata"), "--configuration", "Release",
+                "--output", str(output),
+            )
+            data = json.loads(output.read_text())
+            relations = data["data"]["relations"]
+            self.assertEqual(len(relations), 5)
+            manifest = next(item for item in relations if item["manifest"])
+            self.assertEqual(manifest["target"], "SampleApp")
+            self.assertEqual(manifest["bundle_identifier"], "org.example.Sample")
+            self.assertNotIn("/tmp/build", output.read_text())
+
     def test_runner_is_dry_run_and_rejects_repo_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "repo"
@@ -147,6 +191,20 @@ class ToolingTests(unittest.TestCase):
                 "--evidence-output", str(Path(temp) / "evidence.json"), "--execute", expect=1,
             )
             self.assertIn("detected Run Script", result.stderr)
+
+    def test_runner_execute_requires_capability_acknowledgement(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "repo"
+            project = root / "Sample.xcodeproj"
+            project.mkdir(parents=True)
+            (project / "project.pbxproj").write_text("// empty synthetic project\n")
+            result = run_script(
+                "run_isolated_xcode.py", "--root", str(root), "--project", str(project),
+                "--scheme", "Sample", "--action", "build", "--output-root", str(Path(temp) / "out"),
+                "--evidence-output", str(Path(temp) / "evidence.json"), "--execute", expect=1,
+            )
+            self.assertIn("capability preview", result.stderr)
+            self.assertIn("execution_preview", result.stdout)
 
     def test_report_assembly_redacts_secrets_and_calculates_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -202,6 +260,40 @@ class ToolingTests(unittest.TestCase):
             self.assertEqual(report["scope"]["policy_sources"][0]["retrieved_at"], "2026-08-30")
             self.assertIn("retrieved 2026-08-30", md_output.read_text())
 
+    def test_baseline_and_suppression_remove_ci_noise_but_preserve_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            fragment = {
+                "schema_version": "0.2.0", "tool": "fixture", "generated_at": "2026-08-30T00:00:00+00:00",
+                "layer": "source", "subject": {"name": "fixture", "path_fingerprint": "c" * 64, "revision": None},
+                "checks": [],
+                "findings": [{
+                    "id": "KNOWN-FP", "severity": "P1", "disposition": "FAIL", "verification": "CONFIRMED",
+                    "category": "Fixture", "title": "Known false positive", "explanation": "synthetic",
+                    "authority": {"type": "QUALITY_ONLY", "url": None}, "evidence": [{"path": "App/File.swift"}],
+                    "remediation": "review", "assumptions": []
+                }], "data": {}
+            }
+            input_path = directory / "fragment.json"
+            input_path.write_text(json.dumps(fragment))
+            suppressions = directory / "suppressions.json"
+            suppressions.write_text(json.dumps({"suppressions": [{
+                "finding_id": "KNOWN-FP", "justification": "Confirmed generated-code false positive.",
+                "owner": "mobile-team", "expires_at": "2099-12-31", "rule_version": "fixture@1"
+            }]}))
+            report_path = directory / "report.json"
+            sarif_path = directory / "report.sarif"
+            run_script(
+                "assemble_report.py", "--input", str(input_path), "--json-output", str(report_path),
+                "--markdown-output", str(directory / "report.md"), "--sarif-output", str(sarif_path),
+                "--suppressions", str(suppressions),
+            )
+            report = json.loads(report_path.read_text())
+            self.assertEqual(report["verdict"], "GO")
+            self.assertEqual(report["findings"][0]["id"], "KNOWN-FP")
+            self.assertEqual(report["triage"]["suppressed"][0]["id"], "KNOWN-FP")
+            self.assertEqual(json.loads(sarif_path.read_text())["runs"][0]["results"], [])
+
     def test_schemas_are_valid_json(self) -> None:
         schema_dir = ROOT / "skill" / "app-store-preflight-audit" / "references" / "schemas"
         for path in schema_dir.glob("*.json"):
@@ -229,6 +321,36 @@ class ToolingTests(unittest.TestCase):
                 "--previous", str(first), "--output", str(second),
             )
             self.assertEqual(json.loads(second.read_text())["data"]["policy_sources"][0]["change"], "UNCHANGED")
+
+    def test_rule_registry_is_valid_and_reports_affected_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "registry.json"
+            run_script(
+                "validate_rule_registry.py", "--registry",
+                str(ROOT / "skill" / "app-store-preflight-audit" / "references" / "policy-registry.json"),
+                "--output", str(output),
+            )
+            data = json.loads(output.read_text())
+            self.assertTrue(data["valid"])
+            self.assertEqual(data["rule_count"], 4)
+            self.assertEqual(len(data["affected_rule_ids"]["added"]), 4)
+
+    def test_app_store_connect_import_is_read_only_and_redacts_review_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            export = directory / "asc.json"
+            export.write_text(json.dumps({
+                "bundleId": "org.example.Sample", "versionString": "1.0", "buildNumber": "1",
+                "ageRating": {"rating": "4+"}, "appPrivacy": {"tracking": False},
+                "reviewNotes": "username=test password=private-value", "screenshots": ["one.png"],
+            }))
+            output = directory / "asc-fragment.json"
+            run_script("inspect_asc_export.py", "--export", str(export), "--output", str(output))
+            text = output.read_text()
+            data = json.loads(text)
+            self.assertEqual(data["data"]["mode"], "READ_ONLY_IMPORT")
+            self.assertNotIn("private-value", text)
+            self.assertFalse(data["data"]["capabilities"]["modify"])
 
     def test_simulator_plan_marks_unobserved_states_not_run(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
