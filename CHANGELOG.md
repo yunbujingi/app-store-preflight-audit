@@ -11,6 +11,7 @@ All notable changes are documented here. The project follows Semantic Versioning
 - Added hash-only Apple policy freshness/change records scoped by storefront and platform.
 - Added non-mutating Simulator scenario planning and observation normalization.
 - Added deterministic zip packaging, a dry-run-first no-overwrite installer, sample reports, release asset automation, and compatibility documentation.
+- Added aligned English and Simplified Chinese READMEs plus bilingual repository and Skill UI metadata.
 
 ## 0.1.0-beta - 2026-08-30
 

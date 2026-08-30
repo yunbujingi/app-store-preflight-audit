@@ -1,4 +1,6 @@
-# App Store Preflight Audit
+# App Store Preflight Audit / App Store 上架前审计
+
+[English](README.md) | [简体中文](docs/README.zh-CN.md)
 
 An unofficial, evidence-driven Codex skill for auditing Apple-platform apps before App Store submission.
 
@@ -61,7 +63,7 @@ python3 /path/to/quick_validate.py skill/app-store-preflight-audit
 
 The test suite uses Python's standard library and does not require Xcode. Xcode-specific execution is guarded and dry-run by default.
 
-See [the Chinese guide](docs/README.zh-CN.md), [sample report](examples/sample-report.md), [compatibility policy](COMPATIBILITY.md), [disclaimer](DISCLAIMER.md), [security policy](SECURITY.md), and [contribution guide](CONTRIBUTING.md).
+See the [sample report](examples/sample-report.md), [compatibility policy](COMPATIBILITY.md), [disclaimer](DISCLAIMER.md), [security policy](SECURITY.md), and [contribution guide](CONTRIBUTING.md).
 
 ## License
 

@@ -3,7 +3,7 @@ name: app-store-preflight-audit
 description: Perform evidence-driven, read-only preflight audits of Apple-platform app repositories and archives before App Store submission. Use for explicit submission-readiness, rejection-risk, privacy-manifest, archive, or App Store Connect audits; do not use for ordinary Swift code review or as a guarantee of Apple approval.
 ---
 
-# App Store Preflight Audit
+# App Store Preflight Audit / App Store 上架前审计
 
 Assess whether the supplied version is ready to submit, identify likely rejection paths, and leave the repository unchanged. This is an unofficial preflight review, not an Apple decision or legal advice.
 
