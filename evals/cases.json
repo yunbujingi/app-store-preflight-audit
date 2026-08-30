@@ -1,31 +1,70 @@
 {
-  "schema_version": "0.1.0",
+  "schema_version": "0.2.0",
   "cases": [
     {
       "id": "required-reason-declared",
+      "collector": "inspect_privacy_manifests.py",
       "fixture": "fixtures/minimal-app",
-      "invariants": [
-        "PrivacyInfo.xcprivacy parses",
-        "UserDefaults signal is covered",
-        "no missing-reason finding"
+      "expectations": [
+        {"kind": "finding_absent", "rule_id": "PRIVACY-REASON-USERDEFAULTS"},
+        {"kind": "check_state", "rule_id": "PRIVACY-002", "disposition": "PASS"}
       ]
     },
     {
       "id": "required-reason-gap",
+      "collector": "inspect_privacy_manifests.py",
       "fixture": "fixtures/privacy-gap",
-      "invariants": [
-        "missing manifest is not reported as confirmed noncompliance",
-        "UserDefaults signal produces INFERRED NEEDS_VERIFY",
-        "comments do not create duplicate evidence"
+      "expectations": [
+        {"kind": "finding_present", "rule_id": "PRIVACY-REASON-USERDEFAULTS", "disposition": "NEEDS_VERIFY"}
       ]
     },
     {
-      "id": "dry-run-isolation",
-      "fixture": "generated temporary Xcode project",
-      "invariants": [
-        "execution is opt-in",
-        "output inside repository is refused",
-        "run script phases require acknowledgement"
+      "id": "comment-false-positive-control",
+      "collector": "inspect_privacy_manifests.py",
+      "fixture": "fixtures/comment-only-api",
+      "expectations": [
+        {"kind": "finding_absent", "rule_id": "PRIVACY-REASON-USERDEFAULTS"}
+      ]
+    },
+    {
+      "id": "storekit-account-ai-signals",
+      "collector": "project_inventory.py",
+      "fixture": "fixtures/commerce-account-ai",
+      "expectations": [
+        {"kind": "data_contains", "rule_id": "SIGNAL-COMMERCE", "path": "data.feature_signals", "value": "commerce"},
+        {"kind": "data_contains", "rule_id": "SIGNAL-ACCOUNT-DELETION", "path": "data.behavior_signals", "value": "account-deletion"},
+        {"kind": "data_contains", "rule_id": "SIGNAL-THIRD-PARTY-AI", "path": "data.behavior_signals", "value": "third-party-ai-data-flow"}
+      ]
+    },
+    {
+      "id": "multi-target-extension-signals",
+      "collector": "project_inventory.py",
+      "fixture": "fixtures/multi-target",
+      "expectations": [
+        {"kind": "data_contains", "rule_id": "TARGET-WIDGET", "path": "data.targets", "value": "SampleWidget"},
+        {"kind": "data_contains", "rule_id": "TARGET-WATCH", "path": "data.targets", "value": "SampleWatch"},
+        {"kind": "data_contains", "rule_id": "TARGET-SHARE", "path": "data.targets", "value": "SampleShare"}
+      ]
+    },
+    {
+      "id": "target-graph-membership",
+      "collector": "inspect_target_graph.py",
+      "fixture": "fixtures/multi-target",
+      "collector_args": ["--project", "Sample.xcodeproj", "--metadata-dir", "metadata", "--configuration", "Release"],
+      "expectations": [
+        {"kind": "check_state", "rule_id": "TARGET-GRAPH-001", "disposition": "PASS"},
+        {"kind": "check_state", "rule_id": "TARGET-GRAPH-002", "disposition": "PASS"},
+        {"kind": "check_state", "rule_id": "TARGET-GRAPH-003", "disposition": "PASS"}
+      ]
+    },
+    {
+      "id": "regional-commerce-signals",
+      "collector": "project_inventory.py",
+      "fixture": "fixtures/regional-commerce",
+      "expectations": [
+        {"kind": "data_contains", "rule_id": "REGIONAL-COMMERCE-PLIST", "path": "data.regional_commerce_signals", "value": "App/Info.plist"},
+        {"kind": "data_contains", "rule_id": "REGIONAL-COMMERCE-ENTITLEMENT", "path": "data.regional_commerce_signals", "value": "App/Regional.entitlements"},
+        {"kind": "data_contains", "rule_id": "REGIONAL-EXTERNAL-PURCHASE", "path": "data.behavior_signals", "value": "external-purchase"}
       ]
     }
   ]

@@ -1,4 +1,4 @@
 interface:
-  display_name: "App Store Preflight Audit"
-  short_description: "Evidence-driven Apple submission readiness audit"
-  default_prompt: "Use $app-store-preflight-audit to audit this Apple-platform app before App Store submission."
+  display_name: "App Store Preflight Audit / App Store 上架前审计"
+  short_description: "Evidence-driven App Store audit / 证据驱动的上架前审计"
+  default_prompt: "Use $app-store-preflight-audit to audit this Apple-platform app before App Store submission / 使用 $app-store-preflight-audit 对这个 Apple 平台 App 执行上架前审计。"

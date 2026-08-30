@@ -16,7 +16,7 @@ Use only current `developer.apple.com` pages as authority for policy findings. D
 
 ## Freshness record
 
-For each material rule conclusion record:
+For each material rule conclusion, update the rule-level registry and record:
 
 - official URL;
 - retrieval date and timezone;
@@ -25,6 +25,7 @@ For each material rule conclusion record:
 - storefront assumption;
 - whether the page was successfully retrieved;
 - any interpretation or exception that remains unresolved.
+- applicable scanner checks, related eval cases, and the last project version that reviewed the rule.
 
 If network access is unavailable, disclose the latest locally verified date. Mark policy-sensitive claims `NEEDS_VERIFY`; technical facts directly observed may remain `CONFIRMED`.
 
@@ -49,3 +50,7 @@ US storefront, EU storefronts, and other storefronts may have different external
 - Do not silently update a stored rule snapshot. Policy behavior changes require a project release note and eval coverage.
 - Do not copy Apple documentation wholesale into this project.
 - When current pages conflict with local references or model memory, current official pages win.
+
+Use `scripts/record_policy_snapshot.py` to store page-level URL, UTC retrieval time, content SHA-256, storefronts, platforms, HTTP metadata when available, and `NEW`/`UNCHANGED`/`CHANGED` status. It accepts only HTTPS pages on `developer.apple.com`, limits responses to 10 MB, and stores no copied page body. A changed page hash is only a review trigger because layout or navigation may have changed.
+
+Use `references/policy-registry.json` and `scripts/validate_rule_registry.py` for rule-level change routing. A rule fingerprint covers applicability, section/source identity, checks, and related evals. Compare registry versions to identify only added, changed, or removed rule IDs; re-run and manually verify the affected checks instead of treating the whole page as a policy change.

@@ -9,6 +9,7 @@ Builds and tests are allowed only as evidence collection, not remediation.
 3. Inspect `PBXShellScriptBuildPhase`, Swift package plugins, generators, CocoaPods phases, and custom wrappers. Treat them as untrusted code.
 4. Select a new output root outside the repository. Do not use or delete the user's existing DerivedData.
 5. State whether dependency downloads, signing, network calls, simulators, devices, Keychain, iCloud, notifications, IAP sandbox, or backend mutations may occur.
+6. Present the exact tokenized command and capability/side-effect preview. Execution requires a separate acknowledgement of that preview.
 
 ## Execution tiers
 
@@ -24,6 +25,7 @@ Builds and tests are allowed only as evidence collection, not remediation.
 - Keep all result bundles, logs, archives, package clones, and DerivedData under the isolated output root.
 - Do not run `git clean`, `git reset`, destructive simulator commands, Keychain deletion, or broad filesystem cleanup.
 - Apply timeouts and preserve the exact exit status.
+- Treat Swift Package command/build-tool plugins, package build/prebuild commands, `PBXBuildRule`, CocoaPods hooks, and other dependency hooks as executable project code. Do not execute them merely because ordinary Run Script phases are absent.
 - After execution, compare Git status and lockfile hashes. If the repository changed, raise a P0 safety finding and stop. Do not revert automatically.
 - Report build, unit test, UI test, archive, signing, and upload validation independently.
 

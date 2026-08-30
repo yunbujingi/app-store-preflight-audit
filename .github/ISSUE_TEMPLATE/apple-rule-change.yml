@@ -1,0 +1,21 @@
+name: Apple rule change / Apple 规则变化
+description: Report a change in an official Apple source.
+title: "[Apple rule change] "
+labels: ["apple-rule-change"]
+body:
+  - type: input
+    id: rule
+    attributes: {label: Stable internal rule ID}
+    validations: {required: true}
+  - type: input
+    id: url
+    attributes: {label: Official developer.apple.com URL}
+    validations: {required: true}
+  - type: input
+    id: observed
+    attributes: {label: Date observed, placeholder: YYYY-MM-DD}
+    validations: {required: true}
+  - type: textarea
+    id: impact
+    attributes: {label: Change summary and affected checks, description: Paraphrase; do not paste long copyrighted text.}
+    validations: {required: true}

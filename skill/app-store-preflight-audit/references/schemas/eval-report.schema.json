@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/app-store-preflight/eval-report.schema.json",
+  "title": "App Store preflight eval report",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "case_file", "metrics", "cases", "gate"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "0.2.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "case_file": {"type": "string"},
+    "metrics": {
+      "type": "object",
+      "required": ["tp", "tn", "fp", "fn", "unknown", "blocked", "precision", "recall", "false_positive_rate", "per_rule"],
+      "properties": {
+        "tp": {"type": "integer", "minimum": 0}, "tn": {"type": "integer", "minimum": 0},
+        "fp": {"type": "integer", "minimum": 0}, "fn": {"type": "integer", "minimum": 0},
+        "unknown": {"type": "integer", "minimum": 0}, "blocked": {"type": "integer", "minimum": 0},
+        "precision": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "recall": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "false_positive_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "per_rule": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "cases": {"type": "array", "items": {"type": "object"}},
+    "gate": {
+      "type": "object",
+      "required": ["max_false_positives", "max_false_negatives", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "max_false_positives": {"type": "integer", "minimum": 0},
+        "max_false_negatives": {"type": "integer", "minimum": 0},
+        "passed": {"type": "boolean"}
+      }
+    }
+  }
+}

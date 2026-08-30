@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/app-store-preflight/suppressions.schema.json",
+  "title": "App Store preflight finding suppressions",
+  "type": "object",
+  "required": ["schema_version", "suppressions"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "0.2.0"},
+    "suppressions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["justification", "owner", "expires_at", "rule_version"],
+        "anyOf": [{"required": ["finding_id"]}, {"required": ["fingerprint"]}],
+        "additionalProperties": false,
+        "properties": {
+          "finding_id": {"type": "string", "minLength": 1},
+          "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "justification": {"type": "string", "minLength": 10},
+          "owner": {"type": "string", "minLength": 1},
+          "expires_at": {"type": "string", "format": "date"},
+          "rule_version": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

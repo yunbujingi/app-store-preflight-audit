@@ -1,0 +1,66 @@
+{
+  "schema_version": "0.2.0",
+  "registry_updated_at": "2026-08-30",
+  "rules": [
+    {
+      "id": "ASPA-ACCOUNT-DELETION-001",
+      "apple_url": "https://developer.apple.com/app-store/review/guidelines/#account-sign-in",
+      "guideline_section": "5.1.1(v)",
+      "retrieved_at": "2026-08-30",
+      "effective_date": null,
+      "content_fingerprint": "85c887baa0f0f2ecd753525f57df2cd09b23003651150113f8779d552fae43db",
+      "platforms": ["iOS", "iPadOS", "macOS", "tvOS", "visionOS", "watchOS"],
+      "storefronts": ["ALL"],
+      "app_categories": ["ACCOUNT_BASED"],
+      "business_models": ["ALL"],
+      "applicable_checks": ["ACCOUNT-DELETION"],
+      "last_reviewed_version": "0.2.0-beta",
+      "related_eval_cases": ["storekit-account-ai-signals"]
+    },
+    {
+      "id": "ASPA-PRIVACY-MANIFEST-001",
+      "apple_url": "https://developer.apple.com/documentation/bundleresources/privacy-manifest-files",
+      "guideline_section": "Privacy manifest technical requirement",
+      "retrieved_at": "2026-08-30",
+      "effective_date": null,
+      "content_fingerprint": "7c55f101e07b10075a91117172d4389a125578209cc98d323c8eabefc10e8ddc",
+      "platforms": ["iOS", "iPadOS", "macOS", "tvOS", "visionOS", "watchOS"],
+      "storefronts": ["ALL"],
+      "app_categories": ["ALL"],
+      "business_models": ["ALL"],
+      "applicable_checks": ["PRIVACY-001", "PRIVACY-002", "ARCHIVE-002", "ARCHIVE-004"],
+      "last_reviewed_version": "0.2.0-beta",
+      "related_eval_cases": ["required-reason-declared", "required-reason-gap", "comment-false-positive-control"]
+    },
+    {
+      "id": "ASPA-REQUIRED-REASON-001",
+      "apple_url": "https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api",
+      "guideline_section": "Required-reason API technical requirement",
+      "retrieved_at": "2026-08-30",
+      "effective_date": null,
+      "content_fingerprint": "0f68b99a075846509a1f679613e4f6fe7d7a4cc0308ebcd6fda3138fff387bd4",
+      "platforms": ["iOS", "iPadOS", "macOS", "tvOS", "visionOS", "watchOS"],
+      "storefronts": ["ALL"],
+      "app_categories": ["ALL"],
+      "business_models": ["ALL"],
+      "applicable_checks": ["PRIVACY-002", "ARCHIVE-004"],
+      "last_reviewed_version": "0.2.0-beta",
+      "related_eval_cases": ["required-reason-declared", "required-reason-gap", "comment-false-positive-control"]
+    },
+    {
+      "id": "ASPA-EXTERNAL-PURCHASE-001",
+      "apple_url": "https://developer.apple.com/app-store/review/guidelines/#business",
+      "guideline_section": "3.1.1 and applicable storefront entitlements",
+      "retrieved_at": "2026-08-30",
+      "effective_date": null,
+      "content_fingerprint": "a5bfe101f93ef01b1a5711aa4ef96f2b045f160698a33056d255e8b27f40ded8",
+      "platforms": ["iOS", "iPadOS"],
+      "storefronts": ["REGION_DEPENDENT"],
+      "app_categories": ["DIGITAL_GOODS", "READER", "MUSIC_STREAMING"],
+      "business_models": ["EXTERNAL_PURCHASE", "IAP", "SUBSCRIPTION"],
+      "applicable_checks": ["REGIONAL-COMMERCE-PLIST", "REGIONAL-COMMERCE-ENTITLEMENT", "REGIONAL-EXTERNAL-PURCHASE"],
+      "last_reviewed_version": "0.2.0-beta",
+      "related_eval_cases": ["regional-commerce-signals"]
+    }
+  ]
+}

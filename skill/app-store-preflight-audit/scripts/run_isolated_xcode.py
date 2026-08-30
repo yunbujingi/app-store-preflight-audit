@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _common import add_check, add_finding, git_snapshot, new_fragment, read_text, relpath, write_json
+from _common import add_check, add_finding, git_snapshot, new_fragment, read_text, relpath, strip_source_comments, write_json
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,8 +27,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--evidence-output", required=True, type=Path)
     parser.add_argument("--execute", action="store_true", help="Execute; default is a dry-run plan")
     parser.add_argument("--allow-run-scripts", action="store_true")
+    parser.add_argument("--allow-build-hooks", action="store_true",
+                        help="Acknowledge all detected package/build/dependency hooks")
     parser.add_argument("--allow-dependency-resolution", action="store_true")
     parser.add_argument("--allow-signing", action="store_true")
+    parser.add_argument("--acknowledge-execution-risk", action="store_true",
+                        help="Acknowledge the capability and side-effect preview")
     parser.add_argument("--timeout", type=int, default=3600)
     return parser.parse_args()
 
@@ -39,6 +43,43 @@ def inside(child: Path, parent: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def execution_risks(root: Path) -> list[dict[str, str]]:
+    risks: list[dict[str, str]] = []
+    for path in sorted(root.rglob("project.pbxproj")):
+        content = read_text(path)
+        for marker, kind in (("PBXShellScriptBuildPhase", "run-script-build-phase"),
+                             ("PBXBuildRule", "custom-build-rule")):
+            if marker in content:
+                risks.append({"kind": kind, "path": relpath(path, root)})
+    for path in sorted(root.rglob("Package.swift")):
+        content = strip_source_comments(read_text(path))
+        for marker, kind in ((".plugin(", "swift-package-plugin"),
+                             ("BuildToolPlugin", "swift-build-tool-plugin"),
+                             ("CommandPlugin", "swift-command-plugin"),
+                             ("prebuildCommand", "swift-package-prebuild-command"),
+                             ("buildCommand", "swift-package-build-command")):
+            if marker in content:
+                risks.append({"kind": kind, "path": relpath(path, root)})
+    for path in sorted(root.rglob("Podfile")):
+        content = read_text(path)
+        for marker, kind in (("post_install", "cocoapods-post-install-hook"),
+                             ("script_phase", "cocoapods-script-phase")):
+            if marker in content:
+                risks.append({"kind": kind, "path": relpath(path, root)})
+    return sorted(risks, key=lambda item: (item["path"], item["kind"]))
+
+
+def tokenized_command(command: list[str], root: Path, output_root: Path) -> list[str]:
+    replacements = ((str(output_root), "<OUTPUT_ROOT>"), (str(root), "<REPO_ROOT>"))
+    result = []
+    for argument in command:
+        value = argument
+        for actual, token in replacements:
+            value = value.replace(actual, token)
+        result.append(value)
+    return result
 
 
 def main() -> int:
@@ -58,10 +99,8 @@ def main() -> int:
     if args.action == "test" and not args.destination:
         raise SystemExit("test action requires an explicit --destination")
 
-    pbx_files = list(root.rglob("project.pbxproj"))
-    run_script_count = sum(read_text(path).count("PBXShellScriptBuildPhase") for path in pbx_files)
-    if args.execute and run_script_count and not args.allow_run_scripts:
-        raise SystemExit(f"refusing to execute {run_script_count} detected Run Script build phase(s); inspect them and pass --allow-run-scripts to acknowledge")
+    risks = execution_risks(root)
+    run_script_count = sum(item["kind"] == "run-script-build-phase" for item in risks)
 
     command = ["xcodebuild"]
     command += ["-project" if args.project else "-workspace", str(container_path)]
@@ -80,12 +119,35 @@ def main() -> int:
     if not args.allow_signing:
         command += ["CODE_SIGNING_ALLOWED=NO", "CODE_SIGNING_REQUIRED=NO"]
 
+    preview = {
+        "will_execute": args.execute,
+        "capabilities": {
+            "filesystem_write": ["<OUTPUT_ROOT>"],
+            "repository_write_expected": False,
+            "network_may_be_used": args.allow_dependency_resolution,
+            "signing_and_keychain_may_be_used": args.allow_signing,
+            "simulator_or_device_may_be_used": bool(args.destination),
+            "project_hooks_may_execute": bool(risks),
+        },
+        "detected_execution_risks": risks,
+        "command": tokenized_command(command, root, output_root),
+    }
+    if args.execute:
+        print(json.dumps({"execution_preview": preview}, indent=2))
+    if args.execute and risks and not (args.allow_build_hooks or (args.allow_run_scripts and len(risks) == run_script_count)):
+        kinds = ", ".join(sorted({item["kind"] for item in risks}))
+        raise SystemExit(f"refusing to execute detected Run Script/build hooks ({kinds}); inspect them and pass --allow-build-hooks to acknowledge")
+    if args.execute and not args.acknowledge_execution_risk:
+        raise SystemExit("refusing execution until the capability preview is acknowledged with --acknowledge-execution-risk")
+
     layer = "unit_test" if args.action == "test" else ("archive" if args.action == "archive" else "build")
     fragment = new_fragment("run_isolated_xcode", layer, root)
     before = git_snapshot(root)
     fragment["data"] = {
         "executed": args.execute,
-        "command": command,
+        "command": tokenized_command(command, root, output_root),
+        "execution_preview": preview,
+        "execution_risks": risks,
         "run_script_build_phase_count": run_script_count,
         "signing_allowed": args.allow_signing,
         "dependency_resolution_allowed": args.allow_dependency_resolution,
@@ -97,7 +159,7 @@ def main() -> int:
         add_check(fragment, "XCODE-001", "NOT_RUN", "Xcode command was planned but not executed.",
                   verification="CONFIRMED", blocker="Pass --execute after reviewing the command and build scripts.")
         write_json(evidence_output, fragment)
-        print(json.dumps(command))
+        print(json.dumps({"execution_preview": preview}, indent=2))
         return 0
     if not shutil.which("xcodebuild"):
         add_check(fragment, "XCODE-001", "BLOCKED", "xcodebuild is unavailable.",

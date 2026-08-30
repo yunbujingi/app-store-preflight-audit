@@ -1,0 +1,56 @@
+{
+  "schema_version": "0.2.0",
+  "schema_compatibility": {
+    "accepts_fragment_versions": ["0.1.0", "0.2.0"],
+    "breaking_changes_require_major_version": true
+  },
+  "title": "Synthetic App Store Preflight Audit",
+  "generated_at": "2026-08-30T00:00:00+00:00",
+  "verdict": "CONDITIONAL_GO",
+  "scope": {
+    "storefronts": ["DE", "US"],
+    "policy_sources": []
+  },
+  "coverage": {
+    "archive": {"resolved": 4, "applicable": 5, "coverage_percent": 80}
+  },
+  "checks": [
+    {
+      "id": "ARCHIVE-004",
+      "layer": "archive",
+      "disposition": "NEEDS_VERIFY",
+      "verification": "INFERRED",
+      "summary": "Packaged executable required-reason API signals were cross-checked against direct bundle manifests.",
+      "evidence": [],
+      "blocker": "Static binary evidence requires reachability and approved-reason confirmation."
+    }
+  ],
+  "findings": [
+    {
+      "id": "ARCHIVE-REASON-1",
+      "severity": "P1",
+      "disposition": "NEEDS_VERIFY",
+      "verification": "INFERRED",
+      "category": "Privacy",
+      "title": "Packaged binary API signal lacks a direct declaration",
+      "explanation": "Synthetic symbol evidence is not declared by the containing bundle manifest.",
+      "authority": {
+        "type": "PRIVACY_REQUIREMENT",
+        "url": "https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api"
+      },
+      "evidence": [{"path": "Payload/Sample.app/Sample", "detail": "synthetic required-reason signal"}],
+      "remediation": "Confirm reachable use and declare an accurate approved reason.",
+      "assumptions": ["This sample contains synthetic evidence only."]
+    }
+  ],
+  "triage": {
+    "baseline_used": false,
+    "new": [{"id": "ARCHIVE-REASON-1", "fingerprint": "e31c1ddc85f6fdae7dcea4243611547f180ea1217ea7a1960ced814a6a955ee7"}],
+    "changed": [],
+    "unchanged": [],
+    "resolved": [],
+    "suppressed": [],
+    "expired_suppressions": []
+  },
+  "fragments": []
+}

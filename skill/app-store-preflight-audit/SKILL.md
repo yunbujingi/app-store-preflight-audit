@@ -3,7 +3,7 @@ name: app-store-preflight-audit
 description: Perform evidence-driven, read-only preflight audits of Apple-platform app repositories and archives before App Store submission. Use for explicit submission-readiness, rejection-risk, privacy-manifest, archive, or App Store Connect audits; do not use for ordinary Swift code review or as a guarantee of Apple approval.
 ---
 
-# App Store Preflight Audit
+# App Store Preflight Audit / App Store 上架前审计
 
 Assess whether the supplied version is ready to submit, identify likely rejection paths, and leave the repository unchanged. This is an unofficial preflight review, not an Apple decision or legal advice.
 
@@ -18,9 +18,13 @@ Assess whether the supplied version is ready to submit, identify likely rejectio
    - Current Apple rules or regional commerce: [apple-policy-routing.md](references/apple-policy-routing.md).
    - Privacy, permissions, tracking, AI data sharing, or SDKs: [privacy-and-sdk-audit.md](references/privacy-and-sdk-audit.md).
    - `.xcarchive`, `.app`, extensions, or embedded frameworks: [archive-audit.md](references/archive-audit.md).
+   - Xcode target membership or product attribution: [target-graph.md](references/target-graph.md).
    - Accounts, login, IAP, subscriptions, external purchase, or UGC: [accounts-commerce-and-content.md](references/accounts-commerce-and-content.md).
    - Simulator/device and reviewer-path testing: [runtime-review.md](references/runtime-review.md).
    - App Store Connect metadata or review notes: [app-store-connect.md](references/app-store-connect.md).
+   - CI integration, eval metrics, or regression gates: [eval-and-ci.md](references/eval-and-ci.md).
+   - Baselines, finding diffs, or suppressions: [baseline-and-suppression.md](references/baseline-and-suppression.md).
+   - Installing or packaging this Skill: [installation-and-packaging.md](references/installation-and-packaging.md).
 
 ## Non-negotiable boundaries
 
@@ -38,19 +42,35 @@ Prefer deterministic helpers for repeatable collection:
 
 ```bash
 python3 scripts/project_inventory.py --root /path/to/repo --output /tmp/inventory.json
+python3 scripts/inspect_target_graph.py --root /path/to/repo --project App.xcodeproj \
+  --configuration Release --output /tmp/target-graph.json
 python3 scripts/inspect_privacy_manifests.py --root /path/to/repo --output /tmp/privacy.json
 python3 scripts/inspect_archive.py --archive /path/to/App.xcarchive --output /tmp/archive.json
 ```
 
-For build, test, or archive commands, use `scripts/run_isolated_xcode.py`. It is dry-run by default, refuses output inside the repository, blocks detected Run Script build phases unless explicitly acknowledged, isolates build products, and compares Git state before and after.
+For an Archive-level cross-check, opt into read-only signing evidence explicitly:
+
+```bash
+python3 scripts/inspect_archive.py --archive /path/to/App.ipa --read-entitlements \
+  --verify-signatures --output /tmp/archive.json
+```
+
+For build, test, or archive commands, use `scripts/run_isolated_xcode.py`. It is dry-run by default, refuses output inside the repository, previews capabilities and side effects, blocks detected Run Script phases, custom build rules, package plugins, and dependency hooks unless explicitly acknowledged, isolates build products, and compares Git state before and after.
 
 Combine machine-readable fragments and render the report with:
 
 ```bash
 python3 scripts/assemble_report.py --input /tmp/inventory.json --input /tmp/privacy.json \
   --policy-source https://developer.apple.com/app-store/review/guidelines/ 2026-08-30 \
-  --json-output /tmp/audit.json --markdown-output /tmp/audit.md
+  --json-output /tmp/audit.json --markdown-output /tmp/audit.md \
+  --sarif-output /tmp/audit.sarif --junit-output /tmp/audit.xml
 ```
+
+In recurring CI, add `--baseline prior-audit.json` and a reviewed `--suppressions suppressions.json`. Never create a suppression without a justification, owner, expiry, and source/rule version. Suppression changes CI noise and verdict input but preserves the original finding in JSON.
+
+Import user-exported App Store Connect metadata locally with `inspect_asc_export.py`. It is read-only and can compare bundle ID/version/build with an archive fragment; uploads, edits, submission, and credential-based API access remain out of scope.
+
+Use `record_policy_snapshot.py` for page-level freshness evidence and `validate_rule_registry.py` for rule-level applicability/change routing. The registry keeps stable internal IDs and source metadata without copying Apple page bodies. Use `simulator_review.py` to generate a non-mutating runtime matrix or normalize direct observations; unobserved scenarios remain `NOT_RUN`.
 
 Inspect script output before relying on it. Static pattern matches are leads, not automatic policy violations.
 

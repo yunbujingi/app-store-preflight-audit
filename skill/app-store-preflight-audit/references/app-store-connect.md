@@ -6,6 +6,8 @@ App Store Connect checks are read-only unless the user separately authorizes a s
 
 Use, in descending confidence: authorized read-only API/connector results, user-supplied App Store Connect export/screenshots, repository metadata files, then developer assertions. Label the source and observation time.
 
+Prefer local, user-exported JSON/plist evidence first. `inspect_asc_export.py` fingerprints imported documents, records field presence without exposing review-note or demo credential values, and can compare bundle ID/version/build with an Archive fragment. Its capability record must remain read-only: no network, upload, edit, or submit.
+
 ## App version
 
 Verify selected build, platform version, name/subtitle/description/keywords/promotional text, screenshots/previews, category, age rating, privacy policy/support/marketing URLs, copyright, export compliance, availability, release method, and App Privacy answers.

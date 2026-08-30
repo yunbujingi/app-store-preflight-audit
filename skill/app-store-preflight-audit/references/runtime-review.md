@@ -8,6 +8,10 @@ Use disposable or explicitly designated test state. Do not reset the user's simu
 
 Record device model, OS, orientation, appearance, content size category, locale, network condition, account/data fixture, permissions, build configuration, and result for each run.
 
+`scripts/simulator_review.py` creates the matrix without mutating any Simulator. It can optionally read `xcrun simctl list` inventory, but it does not boot, erase, install, launch, grant permissions, change appearance, or manipulate network state. Supply direct observations as JSON only after running scenarios on an explicitly designated test device. Missing observations remain `NOT_RUN`.
+
+The default matrix covers fresh install, permission denial, dark appearance plus largest supported Dynamic Type, long/empty/loading/error states, and offline/weak/timeout networking. Add product-specific routes rather than marking defaults passed from source inspection.
+
 ## Applicability-driven scenarios
 
 Start with fresh install and the primary value path. Add only applicable states:

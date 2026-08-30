@@ -14,7 +14,14 @@ Include the affected version, reproduction steps using non-sensitive fixtures, i
 
 - Repository source and build scripts are untrusted audit inputs.
 - Helper scripts never execute app binaries.
+- Archive tools invoke only read-only metadata commands (`file`, `lipo`, `otool`, `nm`, and explicitly requested `codesign` inspection/verification) with timeouts.
 - Xcode execution is dry-run by default and refuses output inside the audited repository.
-- Detected Run Script build phases require explicit acknowledgement.
-- Secret-like values are redacted from rendered reports.
+- Detected Run Script phases, custom build rules, Swift Package plugins/build commands, and dependency hooks require explicit acknowledgement.
+- Every executable Xcode request emits a tokenized capability/side-effect preview and requires explicit acknowledgement.
+- Secret-like values and absolute user/temp paths are redacted from all JSON fragments and rendered reports.
+- `.ipa`, plist, Mach-O, source, and App Store Connect import collectors enforce file-count and size budgets and reject symlink/path traversal.
 - The skill never uploads, submits, purchases, deletes, resets, or remediates by implication.
+- Policy snapshots accept only HTTPS `developer.apple.com` sources, cap response size, and retain hashes rather than copied page bodies.
+- Simulator planning never boots, erases, installs, launches, grants permissions, or changes device state.
+- The installer is dry-run-first, rejects archive traversal, and refuses to overwrite an existing Skill.
+- GitHub Actions are pinned to full commit SHAs; release asset upload refuses name collisions instead of clobbering existing files.

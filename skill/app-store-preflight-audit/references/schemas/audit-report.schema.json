@@ -3,10 +3,19 @@
   "$id": "https://example.invalid/app-store-preflight/audit-report.schema.json",
   "title": "App Store preflight audit report",
   "type": "object",
-  "required": ["schema_version", "title", "generated_at", "verdict", "scope", "coverage", "checks", "findings", "fragments"],
+  "required": ["schema_version", "schema_compatibility", "title", "generated_at", "verdict", "scope", "coverage", "checks", "findings", "triage", "fragments"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": "0.1.0"},
+    "schema_version": {"const": "0.2.0"},
+    "schema_compatibility": {
+      "type": "object",
+      "required": ["accepts_fragment_versions", "breaking_changes_require_major_version"],
+      "additionalProperties": false,
+      "properties": {
+        "accepts_fragment_versions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "breaking_changes_require_major_version": {"const": true}
+      }
+    },
     "title": {"type": "string", "minLength": 1},
     "generated_at": {"type": "string", "format": "date-time"},
     "verdict": {"enum": ["GO", "CONDITIONAL_GO", "NO_GO"]},
@@ -24,7 +33,12 @@
             "additionalProperties": false,
             "properties": {
               "url": {"type": "string", "format": "uri"},
-              "retrieved_at": {"type": "string", "minLength": 10}
+              "retrieved_at": {"type": "string", "minLength": 10},
+              "status": {"enum": ["FETCHED", "OFFLINE_FIXTURE", "UNAVAILABLE"]},
+              "content_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+              "change": {"enum": ["NEW", "UNCHANGED", "CHANGED", "UNAVAILABLE"]},
+              "storefronts": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+              "platforms": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
             }
           }
         }
@@ -43,8 +57,38 @@
         }
       }
     },
-    "checks": {"type": "array"},
-    "findings": {"type": "array"},
+    "checks": {"type": "array", "items": {"$ref": "#/$defs/check"}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "triage": {
+      "type": "object",
+      "required": ["baseline_used", "new", "changed", "unchanged", "resolved", "suppressed", "expired_suppressions"],
+      "additionalProperties": false,
+      "properties": {
+        "baseline_used": {"type": "boolean"},
+        "new": {"type": "array", "items": {"$ref": "#/$defs/findingIdentity"}},
+        "changed": {"type": "array", "items": {"$ref": "#/$defs/findingIdentity"}},
+        "unchanged": {"type": "array", "items": {"$ref": "#/$defs/findingIdentity"}},
+        "resolved": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "suppressed": {
+          "type": "array",
+          "items": {
+            "allOf": [{"$ref": "#/$defs/findingIdentity"}],
+            "properties": {
+              "justification": {"type": "string"}, "owner": {"type": "string"},
+              "expires_at": {"type": "string", "format": "date"}, "rule_version": {"type": "string"}
+            },
+            "required": ["id", "fingerprint", "justification", "owner", "expires_at", "rule_version"]
+          }
+        },
+        "expired_suppressions": {
+          "type": "array",
+          "items": {
+            "type": "object", "required": ["id", "expires_at"], "additionalProperties": false,
+            "properties": {"id": {"type": "string"}, "expires_at": {"type": "string", "format": "date"}}
+          }
+        }
+      }
+    },
     "fragments": {
       "type": "array",
       "items": {
@@ -56,6 +100,66 @@
           "layer": {"type": "string"},
           "generated_at": {"type": "string", "format": "date-time"}
         }
+      }
+    }
+  },
+  "$defs": {
+    "findingIdentity": {
+      "type": "object", "required": ["id", "fingerprint"], "additionalProperties": true,
+      "properties": {"id": {"type": "string"}, "fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+    },
+    "layer": {"enum": ["source", "policy", "build", "unit_test", "ui_test", "archive", "runtime", "app_store_connect"]},
+    "disposition": {"enum": ["PASS", "FAIL", "N/A", "NOT_RUN", "NEEDS_VERIFY", "BLOCKED"]},
+    "verification": {"enum": ["CONFIRMED", "INFERRED", "UNRESOLVED"]},
+    "evidence": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "path": {"type": "string"},
+        "line": {"type": "integer", "minimum": 1},
+        "detail": {"type": "string"},
+        "pattern": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "check": {
+      "type": "object",
+      "required": ["id", "layer", "disposition", "verification", "summary", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "layer": {"$ref": "#/$defs/layer"},
+        "disposition": {"$ref": "#/$defs/disposition"},
+        "verification": {"$ref": "#/$defs/verification"},
+        "summary": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+        "blocker": {"type": "string"}
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["id", "severity", "disposition", "verification", "category", "title", "explanation", "authority", "evidence", "remediation", "assumptions"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["P0", "P1", "P2", "P3", "P4"]},
+        "disposition": {"$ref": "#/$defs/disposition"},
+        "verification": {"$ref": "#/$defs/verification"},
+        "category": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "explanation": {"type": "string", "minLength": 1},
+        "authority": {
+          "type": "object",
+          "required": ["type", "url"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {"enum": ["APP_REVIEW_GUIDELINE", "APP_STORE_CONNECT_REQUIREMENT", "PRIVACY_REQUIREMENT", "HIG", "PLATFORM_TECHNICAL_REQUIREMENT", "QUALITY_ONLY"]},
+            "url": {"type": ["string", "null"]}
+          }
+        },
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+        "remediation": {"type": "string", "minLength": 1},
+        "assumptions": {"type": "array", "items": {"type": "string"}}
       }
     }
   }
