@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/app-store-preflight/audit-report.schema.json",
+  "title": "App Store preflight audit report",
+  "type": "object",
+  "required": ["schema_version", "title", "generated_at", "verdict", "scope", "coverage", "checks", "findings", "fragments"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "0.1.0"},
+    "title": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "verdict": {"enum": ["GO", "CONDITIONAL_GO", "NO_GO"]},
+    "scope": {
+      "type": "object",
+      "required": ["storefronts", "policy_sources"],
+      "additionalProperties": false,
+      "properties": {
+        "storefronts": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "policy_sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["url", "retrieved_at"],
+            "additionalProperties": false,
+            "properties": {
+              "url": {"type": "string", "format": "uri"},
+              "retrieved_at": {"type": "string", "minLength": 10}
+            }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["resolved", "applicable", "coverage_percent"],
+        "additionalProperties": false,
+        "properties": {
+          "resolved": {"type": "integer", "minimum": 0},
+          "applicable": {"type": "integer", "minimum": 0},
+          "coverage_percent": {"type": "integer", "minimum": 0, "maximum": 100}
+        }
+      }
+    },
+    "checks": {"type": "array"},
+    "findings": {"type": "array"},
+    "fragments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool", "layer", "generated_at"],
+        "additionalProperties": false,
+        "properties": {
+          "tool": {"type": "string"},
+          "layer": {"type": "string"},
+          "generated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

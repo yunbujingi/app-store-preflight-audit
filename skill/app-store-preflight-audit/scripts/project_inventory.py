@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Collect a conservative, read-only Apple project inventory."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import shutil
+from collections import Counter
+from pathlib import Path
+
+from _common import add_check, git_snapshot, iter_files, new_fragment, read_plist, read_text, relpath, write_json
+
+DEPENDENCY_NAMES = {
+    "Package.swift", "Package.resolved", "Podfile", "Podfile.lock",
+    "Cartfile", "Cartfile.resolved", "Mintfile", "project.yml", "Project.swift",
+}
+PURPOSE_KEY = re.compile(r"^NS.*UsageDescription$")
+IMPORT = re.compile(r"^\s*import\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
+CAPABILITY_MODULES = {
+    "AppTrackingTransparency": "tracking",
+    "AuthenticationServices": "login-services",
+    "AVFoundation": "camera-or-microphone",
+    "CloudKit": "cloudkit",
+    "CoreBluetooth": "bluetooth",
+    "CoreLocation": "location",
+    "EventKit": "calendar-or-reminders",
+    "HealthKit": "health",
+    "Photos": "photos",
+    "StoreKit": "commerce",
+    "UserNotifications": "notifications",
+    "WatchKit": "watch",
+    "WidgetKit": "widget",
+}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    root = args.root.resolve()
+    if not root.is_dir():
+        raise SystemExit(f"repository root is not a directory: {root}")
+
+    fragment = new_fragment("project_inventory", "source", root)
+    files = list(iter_files(root))
+    projects: set[str] = set()
+    workspaces: set[str] = set()
+    dependencies: list[str] = []
+    plists: list[str] = []
+    entitlements: list[str] = []
+    manifests: list[str] = []
+    source_files: list[str] = []
+    purpose_strings: dict[str, list[str]] = {}
+    imports: Counter[str] = Counter()
+    run_script_phases = 0
+    target_names: set[str] = set()
+
+    for path in files:
+        relative = relpath(path, root)
+        for parent in path.parents:
+            if parent == root.parent:
+                break
+            if parent.suffix == ".xcodeproj":
+                projects.add(relpath(parent, root))
+            elif parent.suffix == ".xcworkspace":
+                workspaces.add(relpath(parent, root))
+        if path.name in DEPENDENCY_NAMES:
+            dependencies.append(relative)
+        if path.name == "PrivacyInfo.xcprivacy":
+            manifests.append(relative)
+        if path.suffix == ".entitlements":
+            entitlements.append(relative)
+        if path.suffix == ".plist" or path.name.endswith(".xcprivacy"):
+            plists.append(relative)
+            try:
+                plist = read_plist(path)
+                keys = sorted(key for key in plist if PURPOSE_KEY.match(key))
+                if keys:
+                    purpose_strings[relative] = keys
+            except Exception:
+                pass
+        if path.suffix in {".swift", ".m", ".mm", ".h"}:
+            source_files.append(relative)
+            if path.suffix == ".swift":
+                imports.update(IMPORT.findall(read_text(path)))
+        if path.name == "project.pbxproj":
+            content = read_text(path)
+            run_script_phases += content.count("PBXShellScriptBuildPhase")
+            for match in re.finditer(r"isa = PBXNativeTarget;[\s\S]{0,1200}?name = ([^;]+);", content):
+                target_names.add(match.group(1).strip().strip('"'))
+
+    signals = sorted({CAPABILITY_MODULES[module] for module in imports if module in CAPABILITY_MODULES})
+    fragment["data"] = {
+        "git": git_snapshot(root),
+        "projects": sorted(projects),
+        "workspaces": sorted(workspaces),
+        "targets": sorted(target_names),
+        "dependency_files": sorted(dependencies),
+        "privacy_manifests": sorted(manifests),
+        "entitlements": sorted(entitlements),
+        "plists": sorted(plists),
+        "purpose_string_keys": purpose_strings,
+        "source_file_count": len(source_files),
+        "swift_imports": dict(sorted(imports.items())),
+        "feature_signals": signals,
+        "run_script_build_phase_count": run_script_phases,
+        "tools": {name: bool(shutil.which(name)) for name in ("git", "xcodebuild", "xcrun", "codesign")},
+    }
+
+    add_check(fragment, "SRC-001", "PASS", "Repository was readable and inventory collection completed.")
+    if projects or workspaces:
+        add_check(fragment, "SRC-002", "PASS", "At least one Xcode project or workspace was discovered.")
+    else:
+        add_check(fragment, "SRC-002", "NEEDS_VERIFY", "No Xcode project or workspace was discovered.",
+                  verification="UNRESOLVED", blocker="The repository may use a generator or unsupported layout.")
+    if fragment["data"]["git"]["available"]:
+        add_check(fragment, "SRC-003", "PASS", "Git revision and worktree status were captured.")
+    else:
+        add_check(fragment, "SRC-003", "N/A", "The inspected directory is not a Git worktree.")
+    write_json(args.output.resolve(), fragment)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
