@@ -8,7 +8,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
-from _common import add_check, add_finding, iter_files, new_fragment, read_plist, read_text, relpath, write_json
+from _common import add_check, add_finding, iter_files, new_fragment, read_plist, read_text, relpath, strip_source_comments, write_json
 
 PRIVACY_KEYS = {
     "NSPrivacyTracking", "NSPrivacyTrackingDomains", "NSPrivacyCollectedDataTypes",
@@ -29,11 +29,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     return parser.parse_args()
-
-
-def strip_comments(text: str) -> str:
-    text = re.sub(r"/\*[\s\S]*?\*/", "", text)
-    return re.sub(r"//.*", "", text)
 
 
 def main() -> int:
@@ -99,7 +94,7 @@ def main() -> int:
                     remediation="Correct the plist structure and validate the packaged manifest.",
                 )
         elif path.suffix in SOURCE_SUFFIXES:
-            text = strip_comments(read_text(path))
+            text = strip_source_comments(read_text(path))
             for category, patterns in API_PATTERNS.items():
                 for pattern in patterns:
                     match = re.search(pattern, text)

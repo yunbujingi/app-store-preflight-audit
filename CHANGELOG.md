@@ -2,6 +2,16 @@
 
 All notable changes are documented here. The project follows Semantic Versioning after 1.0.
 
+## 0.2.0-beta - Unreleased
+
+- Added packaged Mach-O, architecture, dynamic dependency, signature, entitlement, and bundle-local required-reason evidence.
+- Added reproducible StoreKit, account deletion, third-party AI, multi-target, Watch/Widget/Share, regional commerce, and negative-control eval fixtures.
+- Added per-rule TP/TN/FP/FN/unknown/blocked metrics and configurable CI gates.
+- Added stable schema `0.2.0`, backwards-compatible `0.1.0` fragment ingestion, SARIF 2.1.0, and JUnit output.
+- Added hash-only Apple policy freshness/change records scoped by storefront and platform.
+- Added non-mutating Simulator scenario planning and observation normalization.
+- Added deterministic zip packaging, a dry-run-first no-overwrite installer, sample reports, release asset automation, and compatibility documentation.
+
 ## 0.1.0-beta - 2026-08-30
 
 - Initial progressive Codex skill structure.

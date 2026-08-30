@@ -21,6 +21,8 @@ Assess whether the supplied version is ready to submit, identify likely rejectio
    - Accounts, login, IAP, subscriptions, external purchase, or UGC: [accounts-commerce-and-content.md](references/accounts-commerce-and-content.md).
    - Simulator/device and reviewer-path testing: [runtime-review.md](references/runtime-review.md).
    - App Store Connect metadata or review notes: [app-store-connect.md](references/app-store-connect.md).
+   - CI integration, eval metrics, or regression gates: [eval-and-ci.md](references/eval-and-ci.md).
+   - Installing or packaging this Skill: [installation-and-packaging.md](references/installation-and-packaging.md).
 
 ## Non-negotiable boundaries
 
@@ -42,6 +44,13 @@ python3 scripts/inspect_privacy_manifests.py --root /path/to/repo --output /tmp/
 python3 scripts/inspect_archive.py --archive /path/to/App.xcarchive --output /tmp/archive.json
 ```
 
+For an Archive-level cross-check, opt into read-only signing evidence explicitly:
+
+```bash
+python3 scripts/inspect_archive.py --archive /path/to/App.xcarchive --read-entitlements \
+  --verify-signatures --output /tmp/archive.json
+```
+
 For build, test, or archive commands, use `scripts/run_isolated_xcode.py`. It is dry-run by default, refuses output inside the repository, blocks detected Run Script build phases unless explicitly acknowledged, isolates build products, and compares Git state before and after.
 
 Combine machine-readable fragments and render the report with:
@@ -49,8 +58,11 @@ Combine machine-readable fragments and render the report with:
 ```bash
 python3 scripts/assemble_report.py --input /tmp/inventory.json --input /tmp/privacy.json \
   --policy-source https://developer.apple.com/app-store/review/guidelines/ 2026-08-30 \
-  --json-output /tmp/audit.json --markdown-output /tmp/audit.md
+  --json-output /tmp/audit.json --markdown-output /tmp/audit.md \
+  --sarif-output /tmp/audit.sarif --junit-output /tmp/audit.xml
 ```
+
+Use `record_policy_snapshot.py` to record hashes, retrieval times, storefront/platform scope, and changes without copying Apple pages into the report. Use `simulator_review.py` to generate a non-mutating runtime matrix or normalize direct observations; unobserved scenarios remain `NOT_RUN`.
 
 Inspect script output before relying on it. Static pattern matches are leads, not automatic policy violations.
 

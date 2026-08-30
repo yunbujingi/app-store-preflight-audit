@@ -6,6 +6,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 
 
@@ -84,6 +86,31 @@ class ToolingTests(unittest.TestCase):
             self.assertEqual(len(bundles["framework"]["privacy_manifests"]), 1)
             self.assertEqual(data["checks"][0]["disposition"], "PASS")
 
+    def test_archive_binary_signal_is_inferred_and_bundle_local(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            archive = root / "Sample.xcarchive"
+            app = archive / "Products" / "Applications" / "Sample.app"
+            app.mkdir(parents=True)
+            (app / "Info.plist").write_bytes(plistlib.dumps({
+                "CFBundleIdentifier": "org.example.Sample",
+                "CFBundleExecutable": "Sample",
+            }))
+            (app / "Sample").write_bytes(b"\xcf\xfa\xed\xfe\x00NSUserDefaults\x00")
+            frameworks = app / "Frameworks"
+            frameworks.mkdir()
+            (frameworks / "libFixture.dylib").write_bytes(b"\xcf\xfa\xed\xfe\x00systemUptime\x00")
+            output = root / "archive.json"
+            run_script("inspect_archive.py", "--archive", str(archive), "--output", str(output), "--skip-binary-tools")
+            data = json.loads(output.read_text())
+            finding = next(item for item in data["findings"] if item["id"].startswith("ARCHIVE-REASON-"))
+            self.assertEqual(finding["verification"], "INFERRED")
+            self.assertEqual(finding["disposition"], "NEEDS_VERIFY")
+            self.assertIn("NSPrivacyAccessedAPICategoryUserDefaults", data["data"]["required_reason_binary_signals"]["Products/Applications/Sample.app"])
+            dylib = data["data"]["standalone_dynamic_libraries"][0]
+            self.assertEqual(dylib["containing_bundle"], "Products/Applications/Sample.app")
+            self.assertIn("NSPrivacyAccessedAPICategorySystemBootTime", dylib["missing_required_reason_categories"])
+
     def test_runner_is_dry_run_and_rejects_repo_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "repo"
@@ -137,12 +164,21 @@ class ToolingTests(unittest.TestCase):
             input_path.write_text(json.dumps(fragment))
             json_output = directory / "report.json"
             md_output = directory / "report.md"
-            run_script("assemble_report.py", "--input", str(input_path), "--json-output", str(json_output), "--markdown-output", str(md_output))
+            sarif_output = directory / "report.sarif"
+            junit_output = directory / "report.xml"
+            run_script(
+                "assemble_report.py", "--input", str(input_path), "--json-output", str(json_output),
+                "--markdown-output", str(md_output), "--sarif-output", str(sarif_output),
+                "--junit-output", str(junit_output),
+            )
             report = json.loads(json_output.read_text())
+            self.assertEqual(report["schema_version"], "0.2.0")
             self.assertEqual(report["verdict"], "CONDITIONAL_GO")
             self.assertEqual(report["coverage"]["source"]["coverage_percent"], 50)
             self.assertNotIn("super-secret-value", json_output.read_text())
             self.assertIn("[REDACTED]", md_output.read_text())
+            self.assertEqual(json.loads(sarif_output.read_text())["version"], "2.1.0")
+            self.assertEqual(ET.parse(junit_output).getroot().tag, "testsuite")
 
     def test_report_records_policy_retrieval_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -171,6 +207,69 @@ class ToolingTests(unittest.TestCase):
         for path in schema_dir.glob("*.json"):
             with self.subTest(path=path.name):
                 json.loads(path.read_text())
+
+    def test_policy_snapshot_records_hash_and_change_without_copying_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            page = directory / "policy.html"
+            page.write_text("official policy fixture v1")
+            first = directory / "first.json"
+            url = "https://developer.apple.com/app-store/review/guidelines/"
+            run_script(
+                "record_policy_snapshot.py", "--source-file", url, str(page),
+                "--storefront", "US", "--platform", "iOS", "--output", str(first),
+            )
+            initial = json.loads(first.read_text())
+            record = initial["data"]["policy_sources"][0]
+            self.assertEqual(record["change"], "NEW")
+            self.assertNotIn("official policy fixture", first.read_text())
+            second = directory / "second.json"
+            run_script(
+                "record_policy_snapshot.py", "--source-file", url, str(page),
+                "--previous", str(first), "--output", str(second),
+            )
+            self.assertEqual(json.loads(second.read_text())["data"]["policy_sources"][0]["change"], "UNCHANGED")
+
+    def test_simulator_plan_marks_unobserved_states_not_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "runtime.json"
+            run_script(
+                "simulator_review.py", "--root", str(FIXTURES / "minimal-app"),
+                "--bundle-id", "org.example.Sample", "--device", "iPhone", "--output", str(output),
+            )
+            data = json.loads(output.read_text())
+            self.assertTrue(all(item["disposition"] == "NOT_RUN" for item in data["checks"]))
+            self.assertFalse(data["data"]["safety"]["mutates_simulator"])
+
+    def test_eval_runner_reports_zero_false_results(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / "eval.json"
+            run_script("run_evals.py", "--cases", str(ROOT / "evals" / "cases.json"), "--output", str(output))
+            data = json.loads(output.read_text())
+            self.assertTrue(data["gate"]["passed"])
+            self.assertEqual(data["metrics"]["fp"], 0)
+            self.assertEqual(data["metrics"]["fn"], 0)
+            self.assertGreater(data["metrics"]["tp"] + data["metrics"]["tn"], 0)
+
+    def test_packaging_is_deterministic_and_install_refuses_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            skill = ROOT / "skill" / "app-store-preflight-audit"
+            first = directory / "first.zip"
+            second = directory / "second.zip"
+            run_script("package_skill.py", "--skill", str(skill), "--output", str(first))
+            run_script("package_skill.py", "--skill", str(skill), "--output", str(second))
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            with zipfile.ZipFile(first) as archive:
+                self.assertIn("app-store-preflight-audit/SKILL.md", archive.namelist())
+            destination = directory / "skills"
+            run_script("install_skill.py", "--source", str(first), "--destination-root", str(destination), "--install")
+            self.assertTrue((destination / "app-store-preflight-audit" / "SKILL.md").is_file())
+            result = run_script(
+                "install_skill.py", "--source", str(first), "--destination-root", str(destination),
+                "--install", expect=1,
+            )
+            self.assertIn("refusing to overwrite", result.stderr)
 
 
 if __name__ == "__main__":

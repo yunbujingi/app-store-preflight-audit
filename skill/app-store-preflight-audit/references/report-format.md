@@ -1,6 +1,8 @@
 # Report format and structured output
 
-Machine-readable output follows [audit-report.schema.json](schemas/audit-report.schema.json). Evidence fragments follow [audit-fragment.schema.json](schemas/audit-fragment.schema.json).
+Machine-readable output follows [audit-report.schema.json](schemas/audit-report.schema.json). Evidence fragments follow [audit-fragment.schema.json](schemas/audit-fragment.schema.json). Eval metrics follow [eval-report.schema.json](schemas/eval-report.schema.json).
+
+Schema `0.2.0` readers accept `0.1.0` fragments. Producers always emit the current schema. Breaking field removals, type changes, or semantic redefinitions require a major schema version; additive optional fields are permitted in a minor version. See [schema-versioning.md](schema-versioning.md).
 
 ## Required human report
 
@@ -27,3 +29,9 @@ Coverage is `resolved applicable checks / discovered applicable checks`. `PASS`,
 ## Language
 
 Write in the user's language. Preserve Apple product names and exact rule identifiers. Clearly distinguish tool output, direct observation, inference, developer assertion, and current official policy.
+
+## CI formats
+
+- Stable JSON is the source of truth and retains evidence, coverage, scope, and compatibility metadata.
+- SARIF 2.1.0 maps finding IDs to rules and P0/P1/P2 to error/warning levels without claiming compiler certainty.
+- JUnit maps `FAIL` to failures and `N/A`, `NOT_RUN`, `NEEDS_VERIFY`, and `BLOCKED` to skipped tests. CI consumers must not reinterpret skipped checks as passes.

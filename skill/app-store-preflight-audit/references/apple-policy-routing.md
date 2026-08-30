@@ -49,3 +49,5 @@ US storefront, EU storefronts, and other storefronts may have different external
 - Do not silently update a stored rule snapshot. Policy behavior changes require a project release note and eval coverage.
 - Do not copy Apple documentation wholesale into this project.
 - When current pages conflict with local references or model memory, current official pages win.
+
+Use `scripts/record_policy_snapshot.py` to store URL, UTC retrieval time, content SHA-256, storefronts, platforms, HTTP metadata when available, and `NEW`/`UNCHANGED`/`CHANGED` status. It accepts only HTTPS pages on `developer.apple.com`, limits responses to 10 MB, and stores no copied page body. A changed hash requires human review because layout or navigation changes can also change the page.

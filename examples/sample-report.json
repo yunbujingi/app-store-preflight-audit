@@ -1,0 +1,20 @@
+{
+  "schema_version": "0.2.0",
+  "schema_compatibility": {
+    "accepts_fragment_versions": ["0.1.0", "0.2.0"],
+    "breaking_changes_require_major_version": true
+  },
+  "title": "Synthetic App Store Preflight Audit",
+  "generated_at": "2026-08-30T00:00:00+00:00",
+  "verdict": "CONDITIONAL_GO",
+  "scope": {
+    "storefronts": ["DE", "US"],
+    "policy_sources": []
+  },
+  "coverage": {
+    "archive": {"resolved": 4, "applicable": 5, "coverage_percent": 80}
+  },
+  "checks": [],
+  "findings": [],
+  "fragments": []
+}

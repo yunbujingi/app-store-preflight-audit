@@ -4,9 +4,21 @@
 
 它将审计拆为源码、隔离构建、Archive、运行体验和 App Store Connect 五层。缺少 Xcode、设备、签名、账号或后台访问时，相应检查会标记为 `NOT_RUN`、`NEEDS_VERIFY` 或 `BLOCKED`，不会伪装成通过。
 
+`v0.2.0-beta` 开发线增加 Mach-O/动态依赖/签名/Entitlement/Privacy Manifest 交叉证据、Apple 规则 hash 时效记录、Simulator 场景矩阵、SARIF/JUnit、可量化误报 eval，以及确定性安装包。
+
 ## 安装
 
-将 `skill/app-store-preflight-audit` 目录复制到 Codex skills 目录，或将该目录打包为兼容 Skill 上传器接受的 zip。
+先生成确定性 zip 和 checksum，再预览安装：
+
+```bash
+python3 skill/app-store-preflight-audit/scripts/package_skill.py \
+  --skill skill/app-store-preflight-audit --output /tmp/app-store-preflight-audit.zip \
+  --checksum-output /tmp/app-store-preflight-audit.zip.sha256
+python3 skill/app-store-preflight-audit/scripts/install_skill.py \
+  --source /tmp/app-store-preflight-audit.zip --destination-root /path/to/skills
+```
+
+确认目标目录后再添加 `--install`；脚本不会覆盖已有 Skill。
 
 ## 调用示例
 
@@ -17,6 +29,8 @@ $app-store-preflight-audit 对当前工程执行 source 模式上架前审计，
 ```text
 $app-store-preflight-audit 对提供的 xcarchive 执行 Archive 级隐私、SDK、Bundle 和 Entitlement 审计。
 ```
+
+CI 可使用稳定 JSON、SARIF 2.1.0 和 JUnit。eval 会分别记录 TP、TN、FP、FN、unknown、blocked 和不可验证原因，这些指标只表示规则质量，不代表 Apple 通过概率。
 
 ## 结论边界
 

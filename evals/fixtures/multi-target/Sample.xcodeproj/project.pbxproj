@@ -1,0 +1,9 @@
+// Synthetic target inventory fixture; it is not intended to build.
+isa = PBXNativeTarget;
+name = SampleApp;
+isa = PBXNativeTarget;
+name = SampleWidget;
+isa = PBXNativeTarget;
+name = SampleWatch;
+isa = PBXNativeTarget;
+name = SampleShare;

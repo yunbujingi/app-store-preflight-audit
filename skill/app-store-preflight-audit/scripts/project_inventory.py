@@ -9,7 +9,7 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
-from _common import add_check, git_snapshot, iter_files, new_fragment, read_plist, read_text, relpath, write_json
+from _common import add_check, git_snapshot, iter_files, new_fragment, read_plist, read_text, relpath, strip_source_comments, write_json
 
 DEPENDENCY_NAMES = {
     "Package.swift", "Package.resolved", "Podfile", "Podfile.lock",
@@ -31,6 +31,19 @@ CAPABILITY_MODULES = {
     "UserNotifications": "notifications",
     "WatchKit": "watch",
     "WidgetKit": "widget",
+}
+BEHAVIOR_PATTERNS = {
+    "account-deletion": (r"\bdeleteAccount\b", r"\brequestAccountDeletion\b", r"\bdeleteUser\b"),
+    "third-party-ai-data-flow": (r"\bAIProvider\b", r"\bThirdPartyAI\b", r"\bmodelProvider\b"),
+    "external-purchase": (r"\bExternalPurchase", r"\bSKExternalPurchase"),
+}
+REGIONAL_COMMERCE_KEYS = {
+    "SKExternalPurchase", "SKExternalPurchaseLink", "SKExternalPurchaseMultiLink",
+    "SKExternalPurchaseCustomLinkRegions", "SKExternalPurchaseLinkStreamingRegions",
+    "com.apple.developer.storekit.external-purchase",
+    "com.apple.developer.storekit.external-purchase-link",
+    "com.apple.developer.storekit.external-purchase-link-streaming",
+    "com.apple.developer.storekit.custom-purchase-link.allowed-regions",
 }
 
 
@@ -60,6 +73,8 @@ def main() -> int:
     imports: Counter[str] = Counter()
     run_script_phases = 0
     target_names: set[str] = set()
+    behavior_signals: dict[str, list[dict[str, object]]] = {}
+    regional_commerce_signals: dict[str, list[str]] = {}
 
     for path in files:
         relative = relpath(path, root)
@@ -76,19 +91,34 @@ def main() -> int:
             manifests.append(relative)
         if path.suffix == ".entitlements":
             entitlements.append(relative)
-        if path.suffix == ".plist" or path.name.endswith(".xcprivacy"):
+        if path.suffix in {".plist", ".entitlements"} or path.name.endswith(".xcprivacy"):
             plists.append(relative)
             try:
                 plist = read_plist(path)
                 keys = sorted(key for key in plist if PURPOSE_KEY.match(key))
                 if keys:
                     purpose_strings[relative] = keys
+                commerce_keys = sorted(set(plist) & REGIONAL_COMMERCE_KEYS)
+                if commerce_keys:
+                    regional_commerce_signals[relative] = commerce_keys
             except Exception:
                 pass
         if path.suffix in {".swift", ".m", ".mm", ".h"}:
             source_files.append(relative)
+            content = read_text(path)
             if path.suffix == ".swift":
-                imports.update(IMPORT.findall(read_text(path)))
+                imports.update(IMPORT.findall(content))
+            signal_content = strip_source_comments(content)
+            for signal, patterns in BEHAVIOR_PATTERNS.items():
+                for pattern in patterns:
+                    match = re.search(pattern, signal_content)
+                    if match:
+                        behavior_signals.setdefault(signal, []).append({
+                            "path": relative,
+                            "line": signal_content[:match.start()].count("\n") + 1,
+                            "pattern": pattern,
+                        })
+                        break
         if path.name == "project.pbxproj":
             content = read_text(path)
             run_script_phases += content.count("PBXShellScriptBuildPhase")
@@ -109,6 +139,8 @@ def main() -> int:
         "source_file_count": len(source_files),
         "swift_imports": dict(sorted(imports.items())),
         "feature_signals": signals,
+        "behavior_signals": dict(sorted(behavior_signals.items())),
+        "regional_commerce_signals": dict(sorted(regional_commerce_signals.items())),
         "run_script_build_phase_count": run_script_phases,
         "tools": {name: bool(shutil.which(name)) for name in ("git", "xcodebuild", "xcrun", "codesign")},
     }

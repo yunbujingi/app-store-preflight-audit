@@ -13,7 +13,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.2.0"
+SUPPORTED_SCHEMA_VERSIONS = {"0.1.0", SCHEMA_VERSION}
 DISPOSITIONS = {"PASS", "FAIL", "N/A", "NOT_RUN", "NEEDS_VERIFY", "BLOCKED"}
 VERIFICATIONS = {"CONFIRMED", "INFERRED", "UNRESOLVED"}
 SEVERITIES = {"P0", "P1", "P2", "P3", "P4"}
@@ -61,6 +62,15 @@ def read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
+
+
+def strip_source_comments(text: str) -> str:
+    """Remove common C/Swift comments before conservative static signal matching."""
+    def preserve_lines(match: re.Match[str]) -> str:
+        return "".join("\n" if character == "\n" else " " for character in match.group(0))
+
+    text = re.sub(r"/\*[\s\S]*?\*/", preserve_lines, text)
+    return re.sub(r"//.*", preserve_lines, text)
 
 
 def read_plist(path: Path) -> dict[str, Any]:
