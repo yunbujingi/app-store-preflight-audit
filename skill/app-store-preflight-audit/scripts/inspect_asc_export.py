@@ -9,9 +9,7 @@ import plistlib
 from pathlib import Path
 from typing import Any
 
-from _common import ScanLimitExceeded, add_check, add_finding, iter_files, new_fragment, read_plist, relpath, sha256_bytes, write_json
-
-SENSITIVE_TEXT_KEYS = {"reviewnotes", "review_notes", "notes", "demousername", "demopassword"}
+from _common import ScanLimitExceeded, add_check, add_finding, iter_files, new_fragment, relpath, sha256_bytes, write_json
 ALIASES = {
     "bundle_identifier": {"bundleid", "bundleidentifier", "bundle_id", "product_bundle_identifier"},
     "version": {"version", "versionstring", "cfbundleshortversionstring"},
@@ -28,6 +26,10 @@ ALIASES = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--export", required=True, type=Path)
+    parser.add_argument("--api-fragment", action="append", default=[], type=Path,
+                        help="Optional output from fetch_asc_readonly.py")
+    parser.add_argument("--expected", type=Path,
+                        help="Optional canonical JSON expectations for privacy, age rating, commerce, screenshots, or build inventory")
     parser.add_argument("--archive-fragment", type=Path)
     parser.add_argument("--max-files", type=int, default=2_000)
     parser.add_argument("--max-total-size", type=int, default=100_000_000)
@@ -72,6 +74,50 @@ def summarize_value(key: str, value: Any) -> dict[str, Any]:
     return summary
 
 
+def canonical_hash(value: Any) -> str:
+    return sha256_bytes(json.dumps(value, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=False).encode("utf-8"))
+
+
+def collect_api_fragment(path: Path, signals: dict[str, list[Any]]) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 20_000_000:
+        raise ValueError("ASC API fragment is unavailable or exceeds the size budget")
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("api-fragment root must be an object")
+    data = value.get("data")
+    capabilities = data.get("capabilities") if isinstance(data, dict) else None
+    if value.get("tool") != "fetch_asc_readonly" or not isinstance(capabilities, dict):
+        raise ValueError("api-fragment was not produced by fetch_asc_readonly.py")
+    if capabilities.get("upload") is not False or capabilities.get("modify") is not False or capabilities.get("submit") is not False:
+        raise ValueError("api-fragment does not assert the permanent read-only capability boundary")
+    records = data.get("records")
+    if not isinstance(records, list):
+        raise ValueError("api-fragment records must be an array")
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        if not isinstance(record, dict) or not isinstance(record.get("attributes"), dict):
+            continue
+        grouped.setdefault(str(record.get("type")), []).append(record["attributes"])
+    mappings = {
+        "ageRatingDeclarations": "age_rating", "inAppPurchases": "iap",
+        "subscriptions": "subscriptions", "appScreenshots": "screenshots",
+        "builds": "build_inventory",
+    }
+    for resource_type, key in mappings.items():
+        if resource_type in grouped:
+            signals.setdefault(key, []).append(grouped[resource_type])
+    for attributes in grouped.get("apps", []):
+        if "bundleId" in attributes:
+            signals.setdefault("bundle_identifier", []).append(attributes["bundleId"])
+    for attributes in grouped.get("builds", []):
+        if "version" in attributes:
+            signals.setdefault("build", []).append(attributes["version"])
+    for attributes in grouped.get("appStoreVersions", []):
+        if "versionString" in attributes:
+            signals.setdefault("version", []).append(attributes["versionString"])
+    return {"path": path.name, "endpoint": data.get("endpoint"), "record_count": len(records)}
+
+
 def main() -> int:
     args = parse_args()
     source = args.export.resolve()
@@ -108,6 +154,12 @@ def main() -> int:
             "format": path.suffix.lower().lstrip("."),
             "sha256": sha256_bytes(path.read_bytes()),
         })
+    api_fragments = []
+    try:
+        for path in args.api_fragment:
+            api_fragments.append(collect_api_fragment(path.resolve(), signals))
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise SystemExit(str(error)) from error
     normalized = {
         key: [summarize_value(key, item) for item in values]
         for key, values in sorted(signals.items())
@@ -116,6 +168,7 @@ def main() -> int:
     fragment["data"] = {
         "mode": "READ_ONLY_IMPORT",
         "documents": sorted(documents, key=lambda item: item["path"]),
+        "api_fragments": sorted(api_fragments, key=lambda item: (str(item["endpoint"]), item["path"])),
         "metadata": normalized,
         "capabilities": {"network": False, "upload": False, "modify": False, "submit": False},
     }
@@ -123,12 +176,49 @@ def main() -> int:
               f"Parsed {len(documents)} local App Store Connect export document(s).",
               blocker=None if documents else "Provide a supported JSON or plist export.")
     for key, check_id in (("app_privacy", "ASC-PRIVACY"), ("age_rating", "ASC-AGE-RATING"),
-                          ("review_notes", "ASC-REVIEW-NOTES"), ("screenshots", "ASC-SCREENSHOTS")):
+                          ("review_notes", "ASC-REVIEW-NOTES"), ("iap", "ASC-IAP"),
+                          ("subscriptions", "ASC-SUBSCRIPTIONS"), ("screenshots", "ASC-SCREENSHOTS"),
+                          ("build_inventory", "ASC-BUILD-INVENTORY")):
         add_check(fragment, check_id, "PASS" if key in normalized else "NEEDS_VERIFY",
                   f"{key.replace('_', ' ').title()} evidence is present in the export." if key in normalized else
                   f"{key.replace('_', ' ').title()} evidence was not found in the export.",
                   verification="CONFIRMED" if key in normalized else "UNRESOLVED",
                   blocker=None if key in normalized else "The export may be partial or use an unsupported shape.")
+
+    if args.expected:
+        try:
+            expected = json.loads(args.expected.resolve().read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise SystemExit(f"invalid expected metadata: {error}") from error
+        allowed_expected = {"app_privacy", "age_rating", "iap", "subscriptions", "screenshots", "build_inventory"}
+        if not isinstance(expected, dict) or set(expected) - allowed_expected:
+            raise SystemExit("expected metadata contains unsupported fields")
+        comparisons = []
+        for key, expected_value in sorted(expected.items()):
+            actual_values = signals.get(key, [])
+            expected_hash = canonical_hash(expected_value)
+            match = any(canonical_hash(value) == expected_hash for value in actual_values)
+            disposition = "PASS" if match else ("BLOCKED" if not actual_values else "FAIL")
+            comparisons.append({"field": key, "disposition": disposition, "expected_sha256": expected_hash,
+                                "observed_representations": len(actual_values)})
+            add_check(
+                fragment, f"ASC-EXPECTED-{key.upper().replace('_', '-')}", disposition,
+                f"{key.replace('_', ' ').title()} {'matches' if match else 'does not match'} the canonical expectation.",
+                verification="CONFIRMED" if match or actual_values else "UNRESOLVED",
+                blocker=None if match else ("No comparable evidence was imported." if not actual_values else None),
+            )
+            if disposition == "FAIL":
+                add_finding(
+                    fragment, f"ASC-EXPECTED-{key.upper().replace('_', '-')}-MISMATCH", "P1", "FAIL", "CONFIRMED", "App Store Connect",
+                    f"App Store Connect {key.replace('_', ' ')} differs from the expected inventory",
+                    "A canonical, hash-based comparison found a mismatch without exposing the underlying metadata values.",
+                    authority_type="APP_STORE_CONNECT_REQUIREMENT",
+                    evidence=[{"detail": f"field={key}; observed representations={len(actual_values)}"}],
+                    remediation="Review the read-only export/API inventory and reconcile the intended submission metadata.",
+                )
+        fragment["data"]["expected_comparisons"] = comparisons
+    else:
+        fragment["data"]["expected_comparisons"] = []
 
     if args.archive_fragment:
         archive = json.loads(args.archive_fragment.resolve().read_text(encoding="utf-8"))

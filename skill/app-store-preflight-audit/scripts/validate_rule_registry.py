@@ -10,7 +10,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from _common import SCHEMA_VERSION, sha256_bytes, utc_now, write_json
+from _common import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS, sha256_bytes, utc_now, write_json
 
 RULE_ID = re.compile(r"^ASPA-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d{3}$")
 FINGERPRINT_FIELDS = (
@@ -34,7 +34,7 @@ def fingerprint(rule: dict[str, Any]) -> str:
 
 def load_registry(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
-    if value.get("schema_version") != SCHEMA_VERSION or not isinstance(value.get("rules"), list):
+    if value.get("schema_version") not in SUPPORTED_SCHEMA_VERSIONS or not isinstance(value.get("rules"), list):
         raise ValueError("unsupported rule registry schema")
     seen = set()
     for rule in value["rules"]:

@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from _common import SCHEMA_VERSION, utc_now, write_json
+from _common import SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSIONS, utc_now, write_json
 
 COLLECTORS = {"project_inventory.py", "inspect_privacy_manifests.py", "inspect_target_graph.py"}
 ALLOWED_COLLECTOR_ARGS = {"--project", "--workspace", "--metadata-dir", "--configuration"}
@@ -82,7 +82,7 @@ def main() -> int:
     root = case_path.parent
     scripts = Path(__file__).resolve().parent
     config = json.loads(case_path.read_text(encoding="utf-8"))
-    if config.get("schema_version") not in {"0.1.0", SCHEMA_VERSION}:
+    if config.get("schema_version") not in SUPPORTED_SCHEMA_VERSIONS:
         raise SystemExit("unsupported eval case schema")
     results = []
     counts = {outcome: 0 for outcome in sorted(OUTCOMES)}

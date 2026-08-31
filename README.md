@@ -6,6 +6,8 @@ An unofficial, evidence-driven Codex skill for auditing Apple-platform apps befo
 
 Latest published release: `v0.2.0-beta`.
 
+Current development target on `codex/v0.3.0-beta`: deeper target/archive truth, cautious runtime evidence, a standalone scanner CLI, verified distribution, and a GET-only App Store Connect inventory adapter.
+
 It separates source inspection, isolated Xcode execution, archive inspection, runtime review, and App Store Connect verification. It produces machine-readable evidence and a concise human report without treating a successful build as proof of approval.
 
 > This project is not affiliated with, endorsed by, or sponsored by Apple Inc. It does not guarantee App Store approval and does not provide legal advice.
@@ -14,22 +16,38 @@ It separates source inspection, isolated Xcode execution, archive inspection, ru
 
 - Progressive skill instructions that load only applicable policy and workflow references.
 - Source, build, archive, and submission audit modes with explicit coverage states.
-- A stable target graph from PBX source/resource phases plus optional `xcodebuild` list/build-setting evidence.
+- A stable target graph from PBX phases and synchronized groups, workspace/SwiftPM/plugin declarations, generated outputs, conditional XCConfig, optional `xcodebuild` metadata, and Link Map attribution.
 - A two-axis evidence model: verification state and impact severity.
 - Isolated Xcode command planning/execution with Git before/after checks.
 - Privacy manifest and required-reason API evidence collection.
 - Archive-level `.xcarchive`, exported bundle, and safety-limited `.ipa` inspection.
 - Mach-O, dynamic dependency, signature, and bundle-local required-reason cross-checks without executing app code.
-- Parent/child ID, version, platform, architecture, embedded-profile, debug-resource, static-library, and Xcode Privacy Report evidence.
+- Parent/child ID, App Clip/Watch/nested-framework, version, platform, normalized Mach-O deployment/SDK, XCFramework slice, embedded-profile, debug-resource, static-library, and semantic Xcode Privacy Report evidence.
 - Stable JSON Schema plus Markdown, SARIF 2.1.0, and JUnit output.
 - A rule-level Apple policy registry with stable IDs, applicability, fingerprints, review versions, and related evals.
-- Read-only local App Store Connect export import and archive identity comparison.
+- Read-only local App Store Connect export import plus a fixed-origin, GET-only, field-allowlisted API inventory adapter. App Privacy answers still require an export.
 - Baseline finding diffs and accountable, expiring suppressions that remain visible in canonical JSON.
-- Non-mutating Simulator scenario plans and normalized direct observations.
+- Explicit non-mutating Simulator matrices, reviewable XCTest plans, screenshot/`xcresult` import, and authorization gates for sensitive scenarios.
 - Reproducible fixtures, per-rule TP/TN/FP/FN metrics, and zero-regression CI gates.
-- Deterministic Skill packaging and a dry-run-first, no-overwrite installer.
+- A dependency-free Python scanner package/CLI, deterministic Skill packaging, per-file provenance/checksums, recoverable upgrades, and optional minisign verification.
 
 ## Install
+
+Install or upgrade the standalone scanner from a checkout with one command:
+
+```bash
+python3 -m pip install --upgrade .
+```
+
+Then run `app-store-preflight-audit --version`. The release CLI can verify and install an immutable Skill asset in one command:
+
+```bash
+app-store-preflight-audit install-release --repository OWNER/app-store-preflight-audit \
+  --version v0.3.0-beta \
+  --destination-root /path/to/skills
+```
+
+This defaults to verification plus a dry-run preview; add `--install`, or `--install --upgrade` to preserve the current installation as a timestamped backup.
 
 Create and inspect a deterministic package:
 
@@ -37,12 +55,15 @@ Create and inspect a deterministic package:
 python3 skill/app-store-preflight-audit/scripts/package_skill.py \
   --skill skill/app-store-preflight-audit \
   --output /tmp/app-store-preflight-audit.zip \
-  --checksum-output /tmp/app-store-preflight-audit.zip.sha256
+  --checksum-output /tmp/app-store-preflight-audit.zip.sha256 \
+  --provenance-output /tmp/app-store-preflight-audit.provenance.json
 python3 skill/app-store-preflight-audit/scripts/install_skill.py \
-  --source /tmp/app-store-preflight-audit.zip --destination-root /path/to/skills
+  --source /tmp/app-store-preflight-audit.zip \
+  --checksum-file /tmp/app-store-preflight-audit.zip.sha256 \
+  --destination-root /path/to/skills
 ```
 
-The installer is a dry run until `--install` is supplied and never overwrites an existing Skill.
+The installer is a dry run until `--install` is supplied. It refuses an existing Skill unless `--upgrade` is explicit, in which case it preserves a timestamped backup first.
 
 ## Use
 

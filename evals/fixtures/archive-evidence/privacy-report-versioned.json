@@ -1,0 +1,18 @@
+{
+  "privacyReportVersion": "2",
+  "bundles": [
+    {
+      "bundleIdentifier": "org.example.Sample",
+      "requiredReasonAPIs": [
+        {
+          "requiredReasonAPIType": "NSPrivacyAccessedAPICategoryUserDefaults"
+        }
+      ]
+    }
+  ],
+  "SDKs": [
+    {
+      "sdkName": "SampleKit"
+    }
+  ]
+}

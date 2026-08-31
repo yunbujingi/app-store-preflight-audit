@@ -2,7 +2,7 @@
 
 Machine-readable output follows [audit-report.schema.json](schemas/audit-report.schema.json). Evidence fragments follow [audit-fragment.schema.json](schemas/audit-fragment.schema.json). Eval metrics follow [eval-report.schema.json](schemas/eval-report.schema.json).
 
-Schema `0.2.0` readers accept `0.1.0` fragments. Producers always emit the current schema. Breaking field removals, type changes, or semantic redefinitions require a major schema version; additive optional fields are permitted in a minor version. See [schema-versioning.md](schema-versioning.md).
+Schema `0.3.0` readers accept `0.1.0`, `0.2.0`, and `0.3.0` fragments. Producers always emit the current schema. Breaking field removals, type changes, or semantic redefinitions require a major schema version; additive optional fields are permitted in a minor version. See [schema-versioning.md](schema-versioning.md).
 
 ## Required human report
 

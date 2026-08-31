@@ -8,7 +8,9 @@ Use disposable or explicitly designated test state. Do not reset the user's simu
 
 Record device model, OS, orientation, appearance, content size category, locale, network condition, account/data fixture, permissions, build configuration, and result for each run.
 
-`scripts/simulator_review.py` creates the matrix without mutating any Simulator. It can optionally read `xcrun simctl list` inventory, but it does not boot, erase, install, launch, grant permissions, change appearance, or manipulate network state. Supply direct observations as JSON only after running scenarios on an explicitly designated test device. Missing observations remain `NOT_RUN`.
+`scripts/simulator_review.py` creates the matrix without mutating any Simulator. Device, OS, locale, appearance, and Dynamic Type must all be explicit or the matrix is `BLOCKED`. It can optionally generate a reviewable `.xctestplan`, inventory screenshots, semantically import an exported JSON or explicitly authorized `xcresulttool` read, and list `simctl` inventory. It does not boot, erase, install, launch, grant permissions, change appearance, or manipulate network state. Missing observations remain `NOT_RUN`.
+
+The generated test-plan environment variables document requested appearance and Dynamic Type for a human-reviewed harness; they do not themselves change Simulator settings. Record screenshots and `.xcresult` from the exact matrix run. StoreKit, permission, and weak-network observations require `authorized=true` plus a named dedicated `test_state`; otherwise force `BLOCKED`, even if the supplied result says `PASS`.
 
 The default matrix covers fresh install, permission denial, dark appearance plus largest supported Dynamic Type, long/empty/loading/error states, and offline/weak/timeout networking. Add product-specific routes rather than marking defaults passed from source inspection.
 

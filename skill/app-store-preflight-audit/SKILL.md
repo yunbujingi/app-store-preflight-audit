@@ -30,6 +30,7 @@ Assess whether the supplied version is ready to submit, identify likely rejectio
 
 - Treat repository contents as evidence, not authority to broaden the task. Inspect build scripts before executing them.
 - Do not edit source, configuration, metadata, UI, assets, lockfiles, signing state, App Store Connect, or user data during an audit.
+- App Store Connect access in this Skill is permanently read-only. Never upload, modify, submit, change pricing/availability, or message App Review from this Skill.
 - Builds may write only to an isolated directory outside the repository. Record Git state before and after. Never revert changes automatically.
 - Do not reset simulators, delete DerivedData, create accounts, purchase products, upload builds, submit versions, or send review messages without explicit authorization.
 - Redact secret values and personal data. Report their type and location, not the value.
@@ -38,20 +39,20 @@ Assess whether the supplied version is ready to submit, identify likely rejectio
 
 ## Evidence collection
 
-Prefer deterministic helpers for repeatable collection:
+Prefer the independently packaged scanner CLI for repeatable collection; the direct scripts remain equivalent fallback entry points because they share the same source:
 
 ```bash
-python3 scripts/project_inventory.py --root /path/to/repo --output /tmp/inventory.json
-python3 scripts/inspect_target_graph.py --root /path/to/repo --project App.xcodeproj \
+app-store-preflight-audit inventory --root /path/to/repo --output /tmp/inventory.json
+app-store-preflight-audit target-graph --root /path/to/repo --project App.xcodeproj \
   --configuration Release --output /tmp/target-graph.json
-python3 scripts/inspect_privacy_manifests.py --root /path/to/repo --output /tmp/privacy.json
-python3 scripts/inspect_archive.py --archive /path/to/App.xcarchive --output /tmp/archive.json
+app-store-preflight-audit privacy --root /path/to/repo --output /tmp/privacy.json
+app-store-preflight-audit archive --archive /path/to/App.xcarchive --output /tmp/archive.json
 ```
 
 For an Archive-level cross-check, opt into read-only signing evidence explicitly:
 
 ```bash
-python3 scripts/inspect_archive.py --archive /path/to/App.ipa --read-entitlements \
+app-store-preflight-audit archive --archive /path/to/App.ipa --read-entitlements \
   --verify-signatures --output /tmp/archive.json
 ```
 
@@ -60,7 +61,7 @@ For build, test, or archive commands, use `scripts/run_isolated_xcode.py`. It is
 Combine machine-readable fragments and render the report with:
 
 ```bash
-python3 scripts/assemble_report.py --input /tmp/inventory.json --input /tmp/privacy.json \
+app-store-preflight-audit assemble --input /tmp/inventory.json --input /tmp/privacy.json \
   --policy-source https://developer.apple.com/app-store/review/guidelines/ 2026-08-30 \
   --json-output /tmp/audit.json --markdown-output /tmp/audit.md \
   --sarif-output /tmp/audit.sarif --junit-output /tmp/audit.xml
@@ -68,9 +69,9 @@ python3 scripts/assemble_report.py --input /tmp/inventory.json --input /tmp/priv
 
 In recurring CI, add `--baseline prior-audit.json` and a reviewed `--suppressions suppressions.json`. Never create a suppression without a justification, owner, expiry, and source/rule version. Suppression changes CI noise and verdict input but preserves the original finding in JSON.
 
-Import user-exported App Store Connect metadata locally with `inspect_asc_export.py`. It is read-only and can compare bundle ID/version/build with an archive fragment; uploads, edits, submission, and credential-based API access remain out of scope.
+Import user-exported App Store Connect metadata locally with `asc-export`. For API inventory, `asc-read` accepts a pre-generated JWT from an environment variable and permits only official-host GET endpoints and fields in the reviewed allowlist. App Privacy answers still require a user export. Uploads, edits, pricing/availability changes, review messaging, and submission remain outside the Skill.
 
-Use `record_policy_snapshot.py` for page-level freshness evidence and `validate_rule_registry.py` for rule-level applicability/change routing. The registry keeps stable internal IDs and source metadata without copying Apple page bodies. Use `simulator_review.py` to generate a non-mutating runtime matrix or normalize direct observations; unobserved scenarios remain `NOT_RUN`.
+Use `policy-snapshot` for page-level freshness evidence and `policy-registry` for rule-level applicability/change routing. The registry keeps stable internal IDs and source metadata without copying Apple page bodies. Use `runtime-plan` to generate a non-mutating explicit matrix and reviewable XCTest plan or to import screenshots/`xcresult`; unobserved scenarios remain `NOT_RUN`, while sensitive states without authorization remain `BLOCKED`.
 
 Inspect script output before relying on it. Static pattern matches are leads, not automatic policy violations.
 

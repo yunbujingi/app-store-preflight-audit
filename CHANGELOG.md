@@ -2,6 +2,16 @@
 
 All notable changes are documented here. The project follows Semantic Versioning after 1.0.
 
+## 0.3.0-beta - Unreleased
+
+- Deepened target graphs with file-system-synchronized groups, configuration membership, workspace/SwiftPM/plugin structure, generated outputs, conditional XCConfig evidence, and Link Map static-library attribution.
+- Added Privacy Report semantic normalization, XCFramework slice identity, normalized Mach-O deployment/SDK records, sanitized signing fixtures, and dedicated App Clip, Watch, and nested-framework consistency rules.
+- Added explicit, non-mutating runtime matrices, reviewable XCTest plan generation, screenshot and `xcresult` import, and authorization gates for StoreKit, permission, and weak-network states.
+- Published the scanner source as a dependency-free Python package/CLI while keeping the Skill as its progressive orchestration layer.
+- Added deterministic per-file provenance, checksums, backed-up upgrades, one-command immutable release installation, and optional minisign verification.
+- Added a GET-only App Store Connect API adapter with an explicit field allowlist, fixed Apple origin, bounded pagination, offline fixtures, and permanent no-write/no-submit scope.
+- Advanced report schemas to `0.3.0` while retaining `0.1.0` and `0.2.0` input compatibility.
+
 ## 0.2.0-beta - 2026-08-30
 
 - Added packaged Mach-O, architecture, dynamic dependency, signature, entitlement, and bundle-local required-reason evidence.

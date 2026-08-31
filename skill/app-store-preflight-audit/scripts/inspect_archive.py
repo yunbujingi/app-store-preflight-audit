@@ -44,11 +44,44 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-binary-tools", action="store_true", help="Skip file/lipo/otool/nm; byte-level inspection still runs")
     parser.add_argument("--verify-signatures", action="store_true", help="Run codesign verification in read-only mode")
     parser.add_argument("--privacy-report", type=Path, help="Optional Xcode-generated privacy report (JSON or plist)")
+    parser.add_argument("--sanitized-signing-fixture", type=Path,
+                        help="Offline JSON/plist fixture containing only bundle paths and sanitized entitlement dictionaries")
     parser.add_argument("--max-files", type=int, default=50_000)
     parser.add_argument("--max-total-size", type=int, default=2_000_000_000)
     parser.add_argument("--max-file-size", type=int, default=500_000_000)
     parser.add_argument("--max-binary-scan-size", type=int, default=64_000_000)
     return parser.parse_args()
+
+
+def load_signing_fixtures(path: Path | None, max_file_size: int) -> dict[str, dict]:
+    if not path:
+        return {}
+    resolved = path.resolve()
+    if resolved.is_symlink() or not resolved.is_file() or resolved.stat().st_size > max_file_size:
+        raise ValueError("sanitized signing fixture is unavailable or exceeds the file-size limit")
+    payload = resolved.read_bytes()
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        value = plistlib.loads(payload)
+    records = value.get("bundles") if isinstance(value, dict) else None
+    if not isinstance(records, list):
+        raise ValueError("sanitized signing fixture must contain a bundles array")
+    result = {}
+    for record in records:
+        if not isinstance(record, dict) or not isinstance(record.get("path"), str):
+            raise ValueError("each sanitized signing fixture record needs a relative bundle path")
+        bundle_path = Path(record["path"])
+        if bundle_path.is_absolute() or ".." in bundle_path.parts:
+            raise ValueError("sanitized signing fixture bundle path must be relative and traversal-free")
+        allowed = {"path", "signed_entitlements", "profile_entitlements"}
+        if set(record) - allowed:
+            raise ValueError("sanitized signing fixture contains unsupported fields")
+        for key in ("signed_entitlements", "profile_entitlements"):
+            if key in record and not isinstance(record[key], dict):
+                raise ValueError(f"{key} must be a dictionary")
+        result[bundle_path.as_posix()] = record
+    return result
 
 
 def safe_zip_extract(source: Path, destination: Path, max_files: int,
@@ -229,17 +262,30 @@ def binary_info(executable: Path | None, root: Path, skip_tools: bool,
         install_name = readonly_tool(["otool", "-D", str(executable)])
         if install_name["return_code"] == 0:
             result["install_names"] = [line.strip() for line in install_name["output"].splitlines()[1:] if line.strip()]
-        load_commands = readonly_tool(["otool", "-l", str(executable)])
+        load_commands = readonly_tool(["otool", "-l", str(executable)], max_output=2_000_000)
         if load_commands["return_code"] == 0:
             blocks = load_commands["output"].split("Load command ")[1:]
             for block in blocks:
-                if "cmd LC_BUILD_VERSION" not in block:
+                command_match = re.search(r"(?m)^\s*cmd\s+(LC_[A-Z0-9_]+)", block)
+                command_name = command_match.group(1) if command_match else None
+                legacy_platforms = {
+                    "LC_VERSION_MIN_IPHONEOS": "ios", "LC_VERSION_MIN_MACOSX": "macos",
+                    "LC_VERSION_MIN_TVOS": "tvos", "LC_VERSION_MIN_WATCHOS": "watchos",
+                }
+                if command_name != "LC_BUILD_VERSION" and command_name not in legacy_platforms:
                     continue
-                record = {}
-                for key in ("platform", "minos", "sdk"):
+                record = {"source_command": command_name}
+                key_names = ("platform", "minos", "sdk") if command_name == "LC_BUILD_VERSION" else ("version", "sdk")
+                for key in key_names:
                     match = re.search(rf"(?m)^\s*{key}\s+([^\s]+)", block)
                     if match:
                         record[key] = match.group(1)
+                if command_name in legacy_platforms:
+                    record["platform"] = legacy_platforms[command_name]
+                    record["minos"] = record.pop("version", None)
+                record["normalized_platform"] = normalized_platform(record.get("platform"))
+                record["minimum_os"] = normalize_version(record.get("minos"))
+                record["sdk_version"] = normalize_version(record.get("sdk"))
                 if record:
                     result["build_versions"].append(record)
         nm = readonly_tool(["nm", "-u", str(executable)])
@@ -314,10 +360,23 @@ def version_tuple(value: object) -> tuple[int, ...] | None:
     return parts + (0,) * (3 - len(parts))
 
 
+def normalize_version(value: object) -> str | None:
+    parsed = version_tuple(value)
+    if not parsed:
+        return None
+    parts = list(parsed)
+    while len(parts) > 2 and parts[-1] == 0:
+        parts.pop()
+    return ".".join(str(item) for item in parts)
+
+
 def normalized_platform(value: object) -> str | None:
     if not isinstance(value, str):
         return None
     aliases = {
+        "1": "macos", "2": "ios", "3": "tvos", "4": "watchos",
+        "6": "maccatalyst", "7": "ios", "8": "tvos", "9": "watchos",
+        "11": "visionos", "12": "visionos",
         "iphoneos": "ios", "ios": "ios", "iphonesimulator": "ios",
         "macosx": "macos", "macos": "macos",
         "watchos": "watchos", "watchsimulator": "watchos",
@@ -328,7 +387,8 @@ def normalized_platform(value: object) -> str | None:
 
 
 def bundle_info(bundle: Path, root: Path, read_entitlements: bool, skip_tools: bool,
-                verify_signatures: bool, max_scan_size: int) -> dict:
+                verify_signatures: bool, max_scan_size: int,
+                signing_fixture: dict | None = None) -> dict:
     info_path = info_plist_path(bundle)
     info: dict = {}
     error = None
@@ -348,6 +408,7 @@ def bundle_info(bundle: Path, root: Path, read_entitlements: bool, skip_tools: b
                 direct_manifests.append({"path": relpath(candidate, root), "valid": False, "error": str(exc), "required_reason_categories": {}})
 
     entitlements = None
+    entitlement_source = "NOT_RUN"
     executable_name = info.get("CFBundleExecutable")
     executable = executable_path(bundle, executable_name)
     if read_entitlements and shutil.which("codesign") and executable and executable.exists():
@@ -362,10 +423,18 @@ def bundle_info(bundle: Path, root: Path, read_entitlements: bool, skip_tools: b
                 end = raw.find(b"</plist>", start)
                 payload = raw[start:end + len(b"</plist>")] if end >= 0 else raw[start:]
                 entitlements = plistlib.loads(payload)
+                entitlement_source = "CODESIGN"
             except Exception:
                 entitlements = {"parse_error": True}
+                entitlement_source = "CODESIGN_PARSE_ERROR"
 
     profile = profile_entitlements(bundle / "embedded.mobileprovision") if read_entitlements else None
+    profile_source = "EMBEDDED_PROFILE" if profile is not None else "NOT_AVAILABLE"
+    if signing_fixture:
+        entitlements = signing_fixture.get("signed_entitlements", entitlements)
+        profile = signing_fixture.get("profile_entitlements", profile)
+        entitlement_source = "OFFLINE_SANITIZED_FIXTURE"
+        profile_source = "OFFLINE_SANITIZED_FIXTURE"
     entitlement_mismatches = []
     if isinstance(entitlements, dict) and isinstance(profile, dict):
         ignored = {"get-task-allow", "beta-reports-active"}
@@ -376,9 +445,18 @@ def bundle_info(bundle: Path, root: Path, read_entitlements: bool, skip_tools: b
                 entitlement_mismatches.append(key)
 
     binary = binary_info(executable, root, skip_tools, verify_signatures, max_scan_size)
+    extension = info.get("NSExtension") if isinstance(info.get("NSExtension"), dict) else {}
+    relative_parts = Path(relpath(bundle, root)).parts
+    special_kind = bundle.suffix.lstrip(".")
+    if bundle.suffix == ".app" and "AppClips" in relative_parts:
+        special_kind = "app_clip"
+    elif bundle.suffix == ".app" and "Watch" in relative_parts:
+        special_kind = "watch_app"
+    elif bundle.suffix == ".appex" and any(part.endswith(".app") and "Watch" in relative_parts for part in relative_parts):
+        special_kind = "watch_extension"
     return {
         "path": relpath(bundle, root),
-        "kind": bundle.suffix.lstrip("."),
+        "kind": special_kind,
         "bundle_identifier": info.get("CFBundleIdentifier"),
         "display_name": info.get("CFBundleDisplayName") or info.get("CFBundleName"),
         "short_version": info.get("CFBundleShortVersionString"),
@@ -391,8 +469,13 @@ def bundle_info(bundle: Path, root: Path, read_entitlements: bool, skip_tools: b
         "privacy_manifests": direct_manifests,
         "embedded_provisioning_profile": (bundle / "embedded.mobileprovision").exists(),
         "entitlements": sanitize_entitlements(entitlements),
+        "entitlement_source": entitlement_source,
+        "profile_source": profile_source,
         "provisioning_profile_entitlement_keys": sorted(profile) if isinstance(profile, dict) else [],
         "entitlement_profile_mismatches": sorted(entitlement_mismatches),
+        "extension_point_identifier": extension.get("NSExtensionPointIdentifier"),
+        "watch_companion_bundle_identifier": info.get("WKCompanionAppBundleIdentifier"),
+        "app_clip_parent_identifiers": sanitize_entitlements(entitlements).get("com.apple.developer.parent-application-identifiers", []) if isinstance(sanitize_entitlements(entitlements), dict) else [],
         "sdk_identity": {
             "name": info.get("CFBundleName") or bundle.stem,
             "bundle_identifier": info.get("CFBundleIdentifier"),
@@ -422,7 +505,15 @@ def privacy_report_info(path: Path | None, max_file_size: int) -> dict | None:
     if not isinstance(value, (dict, list)):
         raise ValueError("privacy report root must be an object or array")
     identities: set[str] = set()
-    interesting = {"bundleIdentifier", "bundleID", "sdkName", "name", "identifier"}
+    sdk_names: set[str] = set()
+    required_categories: set[str] = set()
+    collected_types: set[str] = set()
+    tracking_domains: set[str] = set()
+    interesting = {"bundleIdentifier", "bundleID", "identifier", "bundle_identifier"}
+    sdk_keys = {"sdkName", "sdk", "frameworkName", "libraryName"}
+    required_keys = {"NSPrivacyAccessedAPIType", "apiType", "accessedAPIType", "requiredReasonAPIType"}
+    collected_keys = {"NSPrivacyCollectedDataType", "dataType", "collectedDataType"}
+    domain_keys = {"NSPrivacyTrackingDomains", "trackingDomains"}
 
     def visit(item: object) -> int:
         count = 1
@@ -430,6 +521,14 @@ def privacy_report_info(path: Path | None, max_file_size: int) -> dict | None:
             for key, child in item.items():
                 if key in interesting and isinstance(child, str) and len(child) <= 200:
                     identities.add(child)
+                if key in sdk_keys and isinstance(child, str) and len(child) <= 200:
+                    sdk_names.add(child)
+                if key in required_keys and isinstance(child, str) and child.startswith("NSPrivacyAccessedAPICategory"):
+                    required_categories.add(child)
+                if key in collected_keys and isinstance(child, str) and child.startswith("NSPrivacyCollectedDataType"):
+                    collected_types.add(child)
+                if key in domain_keys and isinstance(child, list):
+                    tracking_domains.update(value for value in child if isinstance(value, str) and len(value) <= 253)
                 count += visit(child)
         elif isinstance(item, list):
             for child in item:
@@ -437,14 +536,61 @@ def privacy_report_info(path: Path | None, max_file_size: int) -> dict | None:
         return count
 
     record_count = visit(value)
+    top_level_keys = sorted(value) if isinstance(value, dict) else []
+    if any(key.startswith("NSPrivacy") for key in top_level_keys):
+        schema_family = "PRIVACY_MANIFEST_AGGREGATE"
+    elif any(key.lower().startswith("privacyreport") for key in top_level_keys):
+        schema_family = "XCODE_PRIVACY_REPORT_VERSIONED"
+    else:
+        schema_family = "XCODE_PRIVACY_REPORT_UNVERSIONED"
     return {
         "path": "<PRIVACY_REPORT>",
         "format": report_format,
         "sha256": sha256_bytes(payload),
-        "top_level_keys": sorted(value) if isinstance(value, dict) else [],
+        "schema_family": schema_family,
+        "top_level_keys": top_level_keys,
         "record_count": record_count,
         "identities": sorted(identities),
+        "sdk_names": sorted(sdk_names),
+        "required_reason_categories": sorted(required_categories),
+        "collected_data_types": sorted(collected_types),
+        "tracking_domains": sorted(tracking_domains),
     }
+
+
+def xcframework_info(container: Path, root: Path) -> dict:
+    result = {"path": relpath(container, root), "valid": False, "slices": []}
+    info = container / "Info.plist"
+    try:
+        value = read_plist(info)
+        libraries = value.get("AvailableLibraries")
+        if not isinstance(libraries, list):
+            raise ValueError("AvailableLibraries must be an array")
+        for record in libraries:
+            if not isinstance(record, dict):
+                raise ValueError("XCFramework slice must be a dictionary")
+            identifier = record.get("LibraryIdentifier")
+            library_path = record.get("LibraryPath")
+            if not isinstance(identifier, str) or not isinstance(library_path, str):
+                raise ValueError("XCFramework slice is missing LibraryIdentifier or LibraryPath")
+            slice_root = container / identifier
+            binary = slice_root / library_path
+            result["slices"].append({
+                "identifier": identifier,
+                "library_path": library_path,
+                "binary_exists": binary.exists(),
+                "architectures": sorted(record.get("SupportedArchitectures", [])),
+                "platform": normalized_platform(record.get("SupportedPlatform")) or record.get("SupportedPlatform"),
+                "platform_variant": record.get("SupportedPlatformVariant"),
+                "headers_path": record.get("HeadersPath"),
+                "debug_symbols_path": record.get("DebugSymbolsPath"),
+            })
+        result["valid"] = True
+        result["format_version"] = value.get("XCFrameworkFormatVersion")
+    except Exception as error:
+        result["error"] = str(error)
+    result["slices"] = sorted(result["slices"], key=lambda item: item["identifier"])
+    return result
 
 
 def main() -> int:
@@ -477,6 +623,7 @@ def main() -> int:
             archive, args.max_files, args.max_total_size, args.max_file_size,
         )
         imported_privacy_report = privacy_report_info(args.privacy_report, args.max_file_size)
+        signing_fixtures = load_signing_fixtures(args.sanitized_signing_fixture, args.max_file_size)
     except (OSError, ValueError, zipfile.BadZipFile, plistlib.InvalidFileException) as error:
         if temporary:
             temporary.cleanup()
@@ -498,6 +645,7 @@ def main() -> int:
         info = bundle_info(
             candidate, archive, args.read_entitlements, args.skip_binary_tools,
             args.verify_signatures, args.max_binary_scan_size,
+            signing_fixtures.get(relpath(candidate, archive)),
         )
         parent = next((parent for parent in candidate.parents if parent != candidate and parent.suffix in BUNDLE_SUFFIXES), None)
         info["parent_bundle"] = relpath(parent, archive) if parent and parent != archive else None
@@ -551,8 +699,11 @@ def main() -> int:
             )
 
     apps = [item for item in bundles if item["kind"] == "app"]
+    app_clips = [item for item in bundles if item["kind"] == "app_clip"]
+    watch_apps = [item for item in bundles if item["kind"] == "watch_app"]
+    watch_extensions = [item for item in bundles if item["kind"] == "watch_extension"]
     frameworks = [item for item in bundles if item["kind"] == "framework"]
-    extensions = [item for item in bundles if item["kind"] == "appex"]
+    extensions = [item for item in bundles if item["kind"] in {"appex", "watch_extension"}]
     bundle_by_path = {item["path"]: item for item in bundles}
     identifiers: dict[str, list[str]] = {}
     for item in bundles:
@@ -570,7 +721,7 @@ def main() -> int:
             )
         declared_minimum = version_tuple(item.get("minimum_os"))
         build_versions = item.get("binary", {}).get("build_versions", [])
-        binary_minimums = {version_tuple(record.get("minos")) for record in build_versions}
+        binary_minimums = {version_tuple(record.get("minimum_os")) for record in build_versions}
         binary_minimums.discard(None)
         if declared_minimum and binary_minimums and declared_minimum not in binary_minimums:
             add_finding(
@@ -592,8 +743,31 @@ def main() -> int:
                 evidence=[{"path": item["binary"]["path"] or item["path"], "detail": "platform mismatch"}],
                 remediation="Select the correct platform slice and rebuild the submitted product.",
             )
+        if item["kind"] == "framework":
+            unsafe_install_names = [
+                value for value in item.get("binary", {}).get("install_names", [])
+                if not value.startswith(("@rpath/", "@loader_path/", "@executable_path/", "/System/Library/", "/usr/lib/"))
+            ]
+            if unsafe_install_names:
+                add_finding(
+                    fragment, f"ARCHIVE-FRAMEWORK-INSTALL-NAME-{len(fragment['findings'])+1}", "P1", "FAIL", "CONFIRMED", "Archive",
+                    "Embedded framework uses a non-portable install name",
+                    "A shipped framework install name is not loader-relative or a system path.",
+                    evidence=[{"path": item["path"], "detail": ", ".join(unsafe_install_names)}],
+                    remediation="Set a portable dynamic-library install name, normally @rpath, and rebuild the framework.",
+                )
+            framework_parent = bundle_by_path.get(item.get("parent_bundle") or "")
+            if framework_parent and framework_parent.get("kind") == "framework":
+                add_finding(
+                    fragment, f"ARCHIVE-NESTED-FRAMEWORK-{len(fragment['findings'])+1}", "P1", "FAIL", "CONFIRMED", "Archive",
+                    "Framework is nested inside another framework",
+                    "The packaged framework hierarchy contains a nested framework bundle that may not be accepted or loaded as intended.",
+                    evidence=[{"path": item["path"], "detail": "framework parent is another framework"}],
+                    remediation="Flatten embedded framework ownership into the containing app or extension and rebuild.",
+                )
         parent = bundle_by_path.get(item.get("parent_bundle") or "")
-        if not parent or parent.get("kind") != "app" or item["kind"] not in {"appex", "app"}:
+        allowed_parent_kinds = {"app"} if item["kind"] in {"appex", "app_clip", "watch_app"} else {"watch_app"}
+        if not parent or parent.get("kind") not in allowed_parent_kinds or item["kind"] not in {"appex", "app_clip", "watch_app", "watch_extension"}:
             continue
         parent_id = parent.get("bundle_identifier")
         child_id = item.get("bundle_identifier")
@@ -605,6 +779,42 @@ def main() -> int:
                 evidence=[{"path": item["path"], "detail": "parent-child bundle ID prefix mismatch"}],
                 remediation="Use a unique child bundle ID prefixed by the containing app bundle ID.",
             )
+        if item["kind"] == "app_clip":
+            allowed_parents = item.get("app_clip_parent_identifiers") or []
+            if parent_id and not allowed_parents:
+                add_finding(
+                    fragment, f"ARCHIVE-APP-CLIP-PARENT-{len(fragment['findings'])+1}", "P1", "NEEDS_VERIFY", "UNRESOLVED", "Archive",
+                    "App Clip parent entitlement was not available",
+                    "The App Clip relationship cannot be verified without signed entitlement evidence.",
+                    evidence=[{"path": item["path"], "detail": "parent-application-identifiers unavailable"}],
+                    remediation="Import codesign entitlements or a sanitized signing fixture and rerun the audit.",
+                )
+            elif parent_id and not any(str(value).endswith(f".{parent_id}") for value in allowed_parents):
+                add_finding(
+                    fragment, f"ARCHIVE-APP-CLIP-PARENT-{len(fragment['findings'])+1}", "P1", "FAIL", "CONFIRMED", "Archive",
+                    "App Clip parent entitlement does not identify the containing app",
+                    "The App Clip's parent-application-identifiers entitlement is inconsistent with the packaged parent app.",
+                    evidence=[{"path": item["path"], "detail": "parent application identifier mismatch"}],
+                    remediation="Align the App Clip entitlement, App ID, and containing app bundle identifier.",
+                )
+        if item["kind"] == "watch_app":
+            companion = item.get("watch_companion_bundle_identifier")
+            if parent_id and not companion:
+                add_finding(
+                    fragment, f"ARCHIVE-WATCH-COMPANION-{len(fragment['findings'])+1}", "P1", "NEEDS_VERIFY", "UNRESOLVED", "Archive",
+                    "Watch companion identifier was not available",
+                    "The packaged Watch app relationship cannot be verified from its Info.plist.",
+                    evidence=[{"path": item["path"], "detail": "WKCompanionAppBundleIdentifier unavailable"}],
+                    remediation="Set or verify WKCompanionAppBundleIdentifier for the containing iOS app.",
+                )
+            elif parent_id and companion != parent_id:
+                add_finding(
+                    fragment, f"ARCHIVE-WATCH-COMPANION-{len(fragment['findings'])+1}", "P1", "FAIL", "CONFIRMED", "Archive",
+                    "Watch companion identifier does not match the containing app",
+                    "WKCompanionAppBundleIdentifier points to a different app bundle identifier.",
+                    evidence=[{"path": item["path"], "detail": "watch companion bundle ID mismatch"}],
+                    remediation="Set WKCompanionAppBundleIdentifier to the containing iOS app bundle identifier.",
+                )
         for key, label in (("short_version", "marketing version"), ("build_version", "build version")):
             if parent.get(key) and item.get(key) and parent[key] != item[key]:
                 add_finding(
@@ -680,6 +890,70 @@ def main() -> int:
             "attribution": "packaged-file",
         })
 
+    xcframeworks = [
+        xcframework_info(path, archive)
+        for path in artifact_directories if path.suffix == ".xcframework"
+    ]
+    for item in xcframeworks:
+        if not item["valid"]:
+            add_finding(
+                fragment, f"ARCHIVE-XCFRAMEWORK-{len(fragment['findings'])+1}", "P1", "FAIL", "CONFIRMED", "Archive",
+                "Packaged XCFramework metadata is malformed",
+                "A shipped XCFramework container could not be interpreted safely.",
+                evidence=[{"path": item["path"], "detail": item.get("error", "invalid Info.plist")}],
+                remediation="Fix the XCFramework package and embed only the intended platform slice.",
+            )
+        else:
+            add_finding(
+                fragment, f"ARCHIVE-XCFRAMEWORK-PACKAGED-{len(fragment['findings'])+1}", "P2", "NEEDS_VERIFY", "CONFIRMED", "Archive",
+                "An XCFramework container is packaged in the final app artifact",
+                "XCFrameworks are normally build-time containers; confirm that shipping all slices as resources is intentional.",
+                evidence=[{"path": item["path"], "detail": f"{len(item['slices'])} slice(s)"}],
+                remediation="Embed only the resolved framework/library slice unless the complete XCFramework is an intentional app resource.",
+            )
+
+    privacy_report_cross_check = None
+    if imported_privacy_report:
+        archive_identities = {
+            str(item["bundle_identifier"]) for item in bundles if item.get("bundle_identifier")
+        }
+        archive_sdk_names = {
+            str(item.get("sdk_identity", {}).get("name") or Path(item["path"]).stem).casefold()
+            for item in frameworks
+        }
+        archive_sdk_names.update(Path(item["path"]).stem.casefold() for item in dynamic_libraries)
+        unmatched_identities = sorted(
+            identity for identity in imported_privacy_report["identities"]
+            if "." in identity and identity not in archive_identities
+        )
+        unmatched_sdks = sorted(
+            name for name in imported_privacy_report["sdk_names"] if name.casefold() not in archive_sdk_names
+        )
+        declared_categories = {
+            category for item in bundles for manifest in item["privacy_manifests"] if manifest["valid"]
+            for category in manifest["required_reason_categories"]
+        }
+        undeclared_report_categories = sorted(set(imported_privacy_report["required_reason_categories"]) - declared_categories)
+        privacy_report_cross_check = {
+            "archive_bundle_identifiers": sorted(archive_identities),
+            "unmatched_report_identities": unmatched_identities,
+            "unmatched_report_sdk_names": unmatched_sdks,
+            "report_categories_without_packaged_declaration": undeclared_report_categories,
+            "verification": "CONFIRMED" if not (unmatched_identities or unmatched_sdks or undeclared_report_categories) else "UNRESOLVED",
+        }
+        imported_privacy_report["cross_check"] = privacy_report_cross_check
+        if unmatched_identities or unmatched_sdks or undeclared_report_categories:
+            add_finding(
+                fragment, "ARCHIVE-PRIVACY-REPORT-MISMATCH", "P1", "NEEDS_VERIFY", "INFERRED", "Privacy",
+                "Xcode Privacy Report does not fully reconcile with packaged bundles",
+                "Report identities, SDK names, or required-reason categories could not all be matched to the submitted artifact.",
+                authority_type="PRIVACY_REQUIREMENT",
+                authority_url="https://developer.apple.com/documentation/bundleresources/privacy-manifest-files",
+                evidence=[{"detail": f"unmatched identities={len(unmatched_identities)}, SDKs={len(unmatched_sdks)}, categories={len(undeclared_report_categories)}"}],
+                remediation="Confirm the report corresponds to this exact archive and reconcile each unmatched SDK, bundle, and required-reason category.",
+                assumptions=["Privacy Report field names vary by Xcode version; unknown schemas remain inferred."],
+            )
+
     suspicious_patterns = (".swift", ".m", ".mm", ".xctest", ".git", ".ds_store")
     debug_sample_resources = []
     for path in artifact_files:
@@ -702,7 +976,11 @@ def main() -> int:
         },
         "ipa_extraction": ipa_extraction,
         "bundles": bundles,
-        "summary": {"apps": len(apps), "extensions": len(extensions), "frameworks": len(frameworks)},
+        "summary": {
+            "apps": len(apps), "app_clips": len(app_clips), "watch_apps": len(watch_apps),
+            "watch_extensions": len(watch_extensions), "extensions": len(extensions),
+            "frameworks": len(frameworks), "xcframeworks": len(xcframeworks),
+        },
         "macho_executables": [item["binary"]["path"] for item in bundles if item["binary"]["is_macho"]],
         "dynamic_dependencies": sorted({dependency for item in bundles for dependency in item["binary"]["dynamic_dependencies"]}),
         "required_reason_binary_signals": {
@@ -718,11 +996,14 @@ def main() -> int:
         ],
         "standalone_dynamic_libraries": dynamic_libraries,
         "static_libraries": static_libraries,
+        "xcframeworks": xcframeworks,
         "static_library_limitation": "Static libraries linked into a final Mach-O cannot be attributed without a Link Map or equivalent linker evidence.",
         "xcode_privacy_report": imported_privacy_report,
+        "privacy_report_cross_check": privacy_report_cross_check,
         "debug_test_sample_resources": sorted(debug_sample_resources),
         "frameworks_without_direct_privacy_manifest": [item["path"] for item in frameworks if not item["privacy_manifests"]],
         "entitlements_requested": args.read_entitlements,
+        "sanitized_signing_fixture_used": bool(signing_fixtures),
         "entitlements_tool_available": bool(shutil.which("codesign")),
         "binary_tools_skipped": args.skip_binary_tools,
         "signature_verification_requested": args.verify_signatures,
@@ -759,12 +1040,12 @@ def main() -> int:
         verification="INFERRED" if missing_reason_count else "CONFIRMED",
         blocker="Static binary evidence requires reachability and approved-reason confirmation." if missing_reason_count else None,
     )
-    if args.read_entitlements:
+    if args.read_entitlements or signing_fixtures:
         parsed = sum(isinstance(item["entitlements"], dict) and not item["entitlements"].get("parse_error") for item in bundles)
         add_check(
             fragment, "ARCHIVE-005", "PASS" if parsed else "BLOCKED",
             f"Parsed entitlements for {parsed} packaged executable(s)." if parsed else "No packaged entitlements could be parsed.",
-            blocker=None if parsed else "codesign may be unavailable, or the artifact may be unsigned.",
+            blocker=None if parsed else "codesign may be unavailable, the artifact may be unsigned, or the sanitized fixture may not match a bundle.",
         )
     else:
         add_check(fragment, "ARCHIVE-005", "NOT_RUN", "Entitlement extraction was not requested.", blocker="Pass --read-entitlements for read-only extraction.")
@@ -775,7 +1056,11 @@ def main() -> int:
     else:
         add_check(fragment, "ARCHIVE-006", "NOT_RUN", "Signature verification was not requested.", blocker="Pass --verify-signatures to run codesign --verify.")
     if imported_privacy_report:
-        add_check(fragment, "ARCHIVE-007", "PASS", "An Xcode-generated privacy report was imported and fingerprinted.")
+        report_ok = privacy_report_cross_check and privacy_report_cross_check["verification"] == "CONFIRMED"
+        add_check(fragment, "ARCHIVE-007", "PASS" if report_ok else "NEEDS_VERIFY",
+                  "An Xcode-generated privacy report was imported, normalized, and cross-checked.",
+                  verification="CONFIRMED" if report_ok else "INFERRED",
+                  blocker=None if report_ok else "Resolve unmatched Privacy Report identities, SDKs, or categories.")
     else:
         add_check(fragment, "ARCHIVE-007", "NOT_RUN", "No Xcode-generated privacy report was supplied.",
                   blocker="Pass --privacy-report to cross-reference Xcode's generated report.")
