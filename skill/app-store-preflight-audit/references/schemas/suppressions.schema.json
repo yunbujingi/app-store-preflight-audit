@@ -6,7 +6,7 @@
   "required": ["schema_version", "suppressions"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": "0.2.0"},
+    "schema_version": {"const": "0.3.0"},
     "suppressions": {
       "type": "array",
       "items": {

@@ -6,7 +6,7 @@
   "required": ["schema_version", "tool", "generated_at", "layer", "subject", "checks", "findings", "data"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": "0.2.0"},
+    "schema_version": {"const": "0.3.0"},
     "tool": {"type": "string", "minLength": 1},
     "generated_at": {"type": "string", "format": "date-time"},
     "layer": {"$ref": "#/$defs/layer"},

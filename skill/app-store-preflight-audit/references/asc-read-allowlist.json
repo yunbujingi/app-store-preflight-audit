@@ -1,0 +1,81 @@
+{
+  "schema_version": "0.3.0",
+  "reviewed_at": "2026-08-31",
+  "base_url": "https://api.appstoreconnect.apple.com",
+  "method": "GET",
+  "privacy_answers_api_status": "NOT_EXPOSED_BY_DOCUMENTED_ALLOWLIST",
+  "sources": [
+    "https://developer.apple.com/documentation/appstoreconnectapi",
+    "https://developer.apple.com/documentation/appstoreconnectapi/get-v1-apps",
+    "https://developer.apple.com/documentation/appstoreconnectapi/age-ratings",
+    "https://developer.apple.com/documentation/appstoreconnectapi/app-screenshot-sets"
+  ],
+  "endpoints": {
+    "apps": {
+      "path": "/v1/apps",
+      "resource_id_required": false,
+      "resource_type": "apps",
+      "attributes": ["name", "bundleId", "sku", "primaryLocale", "isOrEverWasMadeForKids"]
+    },
+    "builds": {
+      "path": "/v1/apps/{id}/builds",
+      "resource_id_required": true,
+      "resource_type": "builds",
+      "attributes": ["version", "uploadedDate", "expirationDate", "expired", "minOsVersion", "lsMinimumSystemVersion", "computedMinMacOsVersion", "computedMinVisionOsVersion", "processingState", "usesNonExemptEncryption"]
+    },
+    "app_infos": {
+      "path": "/v1/apps/{id}/appInfos",
+      "resource_id_required": true,
+      "resource_type": "appInfos",
+      "attributes": ["appStoreState", "appStoreAgeRating", "brazilAgeRating", "kidsAgeBand"]
+    },
+    "age_rating": {
+      "path": "/v1/appInfos/{id}/ageRatingDeclaration",
+      "resource_id_required": true,
+      "resource_type": "ageRatingDeclarations",
+      "attributes": ["advertising", "alcoholTobaccoOrDrugUseOrReferences", "contests", "gambling", "gamblingSimulated", "gunsOrOtherWeapons", "healthOrWellnessTopics", "kidsAgeBand", "lootBox", "medicalOrTreatmentInformation", "messagingAndChat", "parentalControls", "profanityOrCrudeHumor", "ageAssurance", "sexualContentGraphicAndNudity", "sexualContentOrNudity", "horrorOrFearThemes", "matureOrSuggestiveThemes", "unrestrictedWebAccess", "userGeneratedContent", "violenceCartoonOrFantasy", "violenceRealisticProlongedGraphicOrSadistic", "violenceRealistic", "ageRatingOverride", "ageRatingOverrideV2", "koreaAgeRatingOverride", "developerAgeRatingInfoUrl"]
+    },
+    "in_app_purchases": {
+      "path": "/v1/apps/{id}/inAppPurchasesV2",
+      "resource_id_required": true,
+      "resource_type": "inAppPurchases",
+      "attributes": ["name", "productId", "inAppPurchaseType", "state", "familySharable", "availableInAllTerritories"]
+    },
+    "subscription_groups": {
+      "path": "/v1/apps/{id}/subscriptionGroups",
+      "resource_id_required": true,
+      "resource_type": "subscriptionGroups",
+      "attributes": ["referenceName"]
+    },
+    "subscriptions": {
+      "path": "/v1/subscriptionGroups/{id}/subscriptions",
+      "resource_id_required": true,
+      "resource_type": "subscriptions",
+      "attributes": ["name", "productId", "familySharable", "state", "subscriptionPeriod", "groupLevel"]
+    },
+    "app_store_versions": {
+      "path": "/v1/apps/{id}/appStoreVersions",
+      "resource_id_required": true,
+      "resource_type": "appStoreVersions",
+      "attributes": ["platform", "versionString", "appStoreState", "copyright", "releaseType", "earliestReleaseDate", "usesIdfa"]
+    },
+    "version_localizations": {
+      "path": "/v1/appStoreVersions/{id}/appStoreVersionLocalizations",
+      "resource_id_required": true,
+      "resource_type": "appStoreVersionLocalizations",
+      "attributes": ["locale", "description", "keywords", "marketingUrl", "promotionalText", "supportUrl", "whatsNew"]
+    },
+    "screenshot_sets": {
+      "path": "/v1/appStoreVersionLocalizations/{id}/appScreenshotSets",
+      "resource_id_required": true,
+      "resource_type": "appScreenshotSets",
+      "attributes": ["screenshotDisplayType"]
+    },
+    "screenshots": {
+      "path": "/v1/appScreenshotSets/{id}/appScreenshots",
+      "resource_id_required": true,
+      "resource_type": "appScreenshots",
+      "attributes": ["fileSize", "fileName", "sourceFileChecksum", "assetDeliveryState"]
+    }
+  }
+}

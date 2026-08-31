@@ -1,0 +1,15 @@
+{
+  "data": [
+    {
+      "type": "apps",
+      "id": "sanitized-fixture-app-id",
+      "attributes": {
+        "name": "Sample App",
+        "bundleId": "org.example.Sample",
+        "sku": "SAMPLE-SKU",
+        "primaryLocale": "en-US",
+        "isOrEverWasMadeForKids": false
+      }
+    }
+  ]
+}

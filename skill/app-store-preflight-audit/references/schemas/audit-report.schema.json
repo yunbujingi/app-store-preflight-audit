@@ -6,7 +6,7 @@
   "required": ["schema_version", "schema_compatibility", "title", "generated_at", "verdict", "scope", "coverage", "checks", "findings", "triage", "fragments"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": "0.2.0"},
+    "schema_version": {"const": "0.3.0"},
     "schema_compatibility": {
       "type": "object",
       "required": ["accepts_fragment_versions", "breaking_changes_require_major_version"],

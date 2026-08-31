@@ -25,7 +25,7 @@ Inspect each packaged executable without launching it. Record Mach-O detection, 
 
 Check uniqueness and parent/child consistency of identifiers and versions. Separate missing evidence from confirmed mismatch.
 
-Import an Xcode-generated Privacy Report when supplied and fingerprint it. Compare its SDK/bundle identities with shipped bundles without copying arbitrary report content into public output.
+Import an Xcode-generated Privacy Report when supplied, classify the observed schema family, normalize bundle/SDK/category/data-type/domain semantics, and fingerprint it. Compare its SDK/bundle identities and required-reason categories with shipped bundles without copying arbitrary report content into public output. Unknown schemas remain inferred.
 
 ## Privacy and SDK evidence
 
@@ -48,10 +48,14 @@ When entitlements are readable, cross-check `application-identifier` suffixes ag
 
 Decode embedded provisioning profiles only through read-only platform tooling. Compare signed entitlement values with profile allowances, including wildcard semantics, and emit only entitlement keys and sanitized values.
 
+For reproducible cross-platform evals, accept only sanitized signing fixtures containing traversal-free relative bundle paths plus signed/profile entitlement dictionaries. Fixtures never prove signature validity; they only exercise comparison semantics.
+
 ## Resources and release integrity
 
 Inspect final Info.plist values, icons, launch resources, localizations, URL/document types, ATS settings, background modes, debug artifacts, environment endpoints, and packaged test/sample assets. Archive checks should prefer actual bundle contents over source-file presence.
 
 Compare parent/child version, bundle ID prefix, supported platform, architecture, minimum OS, and Mach-O build-version evidence. Missing tool output is a limitation; a confirmed incompatible pair is a finding. Record required-reason symbol evidence with its source executable and confidence.
+
+Normalize `LC_BUILD_VERSION` and legacy deployment commands into platform, minimum OS, and SDK version. Parse XCFramework `AvailableLibraries` into architecture/platform/variant slices and confirm each selected path exists. Apply dedicated App Clip parent-entitlement, Watch companion, and nested-framework checks instead of treating all bundles as generic extensions.
 
 Never execute binaries from the archive.

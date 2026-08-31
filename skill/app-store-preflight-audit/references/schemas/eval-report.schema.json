@@ -6,7 +6,7 @@
   "required": ["schema_version", "generated_at", "case_file", "metrics", "cases", "gate"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": "0.2.0"},
+    "schema_version": {"const": "0.3.0"},
     "generated_at": {"type": "string", "format": "date-time"},
     "case_file": {"type": "string"},
     "metrics": {

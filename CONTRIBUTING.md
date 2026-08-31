@@ -9,8 +9,9 @@ Contributions should improve observable audit behavior rather than add speculati
 3. Run `python3 -m unittest discover -s tests -v`.
 4. Run `python3 skill/app-store-preflight-audit/scripts/run_evals.py --cases evals/cases.json --output /tmp/evals.json` and explain any non-zero FP/FN/blocked result.
 5. Build the Skill zip twice and confirm the archives are byte-identical.
-6. Validate the skill with the bundled Codex `quick_validate.py` tool.
-7. Update `CHANGELOG.md` and `COMPATIBILITY.md` when behavior or the report schema changes.
+6. Build the Python wheel, install it into a temporary virtual environment, and smoke-test at least `--version` plus one offline collector fixture.
+7. Validate the skill with the bundled Codex `quick_validate.py` tool.
+8. Update `CHANGELOG.md` and `COMPATIBILITY.md` when behavior or the report schema changes.
 
 Policy changes must link to a current page on `developer.apple.com`, include the retrieval date, identify storefront or platform applicability, and avoid copying Apple documentation wholesale.
 

@@ -1,0 +1,30 @@
+{
+  "bundles": [
+    {
+      "path": "Products/Applications/Sample.app",
+      "signed_entitlements": {
+        "application-identifier": "SANITIZEDTEAM.org.example.Sample",
+        "com.apple.developer.team-identifier": "SANITIZEDTEAM"
+      },
+      "profile_entitlements": {
+        "application-identifier": "SANITIZEDTEAM.org.example.*",
+        "com.apple.developer.team-identifier": "SANITIZEDTEAM"
+      }
+    },
+    {
+      "path": "Products/Applications/Sample.app/AppClips/Clip.app",
+      "signed_entitlements": {
+        "application-identifier": "SANITIZEDTEAM.org.example.Sample.Clip",
+        "com.apple.developer.parent-application-identifiers": [
+          "SANITIZEDTEAM.org.example.Sample"
+        ]
+      },
+      "profile_entitlements": {
+        "application-identifier": "SANITIZEDTEAM.org.example.Sample.*",
+        "com.apple.developer.parent-application-identifiers": [
+          "SANITIZEDTEAM.org.example.Sample"
+        ]
+      }
+    }
+  ]
+}

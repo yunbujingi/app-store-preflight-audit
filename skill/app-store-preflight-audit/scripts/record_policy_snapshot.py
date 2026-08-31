@@ -45,7 +45,7 @@ def previous_hashes(path: Path | None) -> dict[str, str]:
 
 
 def fetch(url: str, timeout: int) -> tuple[bytes, dict[str, str]]:
-    request = urllib.request.Request(url, headers={"User-Agent": "app-store-preflight-audit/0.2"})
+    request = urllib.request.Request(url, headers={"User-Agent": "app-store-preflight-audit/0.3"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         validate_url(response.geturl())
         payload = response.read(10_000_001)

@@ -35,11 +35,23 @@ jobs:
           python3 skill/app-store-preflight-audit/scripts/package_skill.py \
             --skill skill/app-store-preflight-audit \
             --output dist/app-store-preflight-audit.zip \
-            --checksum-output dist/app-store-preflight-audit.zip.sha256
+            --checksum-output dist/app-store-preflight-audit.zip.sha256 \
+            --provenance-output dist/app-store-preflight-audit.provenance.json
           python3 skill/app-store-preflight-audit/scripts/package_skill.py \
             --skill skill/app-store-preflight-audit \
             --output /tmp/app-store-preflight-audit-second.zip
           cmp dist/app-store-preflight-audit.zip /tmp/app-store-preflight-audit-second.zip
+      - name: Build and smoke-test scanner wheel
+        run: |
+          python3 -m pip wheel . --no-deps --wheel-dir dist
+          python3 -m venv /tmp/app-store-preflight-wheel-test
+          /tmp/app-store-preflight-wheel-test/bin/pip install --no-index dist/app_store_preflight_audit-*.whl
+          /tmp/app-store-preflight-wheel-test/bin/app-store-preflight-audit --version
+          /tmp/app-store-preflight-wheel-test/bin/app-store-preflight-audit asc-read \
+            --endpoint apps --fixture evals/fixtures/asc-api/apps.json \
+            --output /tmp/app-store-preflight-asc-read.json
+          python3 tests/docs_smoke.py \
+            /tmp/app-store-preflight-wheel-test/bin/app-store-preflight-audit
       - name: Check scaffold placeholders
         run: '! grep -R "\[TODO" skill/app-store-preflight-audit'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -48,4 +60,6 @@ jobs:
           path: |
             dist/app-store-preflight-audit.zip
             dist/app-store-preflight-audit.zip.sha256
+            dist/app-store-preflight-audit.provenance.json
+            dist/app_store_preflight_audit-*.whl
           if-no-files-found: error

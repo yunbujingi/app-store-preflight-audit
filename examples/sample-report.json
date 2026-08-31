@@ -1,7 +1,7 @@
 {
-  "schema_version": "0.2.0",
+  "schema_version": "0.3.0",
   "schema_compatibility": {
-    "accepts_fragment_versions": ["0.1.0", "0.2.0"],
+    "accepts_fragment_versions": ["0.1.0", "0.2.0", "0.3.0"],
     "breaking_changes_require_major_version": true
   },
   "title": "Synthetic App Store Preflight Audit",

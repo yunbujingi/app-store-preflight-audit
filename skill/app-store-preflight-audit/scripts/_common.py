@@ -13,8 +13,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
-SCHEMA_VERSION = "0.2.0"
-SUPPORTED_SCHEMA_VERSIONS = {"0.1.0", SCHEMA_VERSION}
+SCHEMA_VERSION = "0.3.0"
+SUPPORTED_SCHEMA_VERSIONS = {"0.1.0", "0.2.0", SCHEMA_VERSION}
 DISPOSITIONS = {"PASS", "FAIL", "N/A", "NOT_RUN", "NEEDS_VERIFY", "BLOCKED"}
 VERIFICATIONS = {"CONFIRMED", "INFERRED", "UNRESOLVED"}
 SEVERITIES = {"P0", "P1", "P2", "P3", "P4"}
