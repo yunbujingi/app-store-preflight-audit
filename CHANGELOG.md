@@ -2,7 +2,7 @@
 
 All notable changes are documented here. The project follows Semantic Versioning after 1.0.
 
-## 0.3.0-beta - Unreleased
+## 0.3.0-beta - 2026-08-31
 
 - Deepened target graphs with file-system-synchronized groups, configuration membership, workspace/SwiftPM/plugin structure, generated outputs, conditional XCConfig evidence, and Link Map static-library attribution.
 - Added Privacy Report semantic normalization, XCFramework slice identity, normalized Mach-O deployment/SDK records, sanitized signing fixtures, and dedicated App Clip, Watch, and nested-framework consistency rules.

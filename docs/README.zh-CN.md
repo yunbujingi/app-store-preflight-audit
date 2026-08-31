@@ -4,9 +4,9 @@
 
 这是一个非官方、证据驱动的 Codex Skill，用于在提交 Apple App Store 前审阅 Apple 平台 App。
 
-最新已发布版本：`v0.2.0-beta`。
+最新已发布版本：`v0.3.0-beta`。
 
-当前 `codex/v0.3.0-beta` 开发目标：深化 target/archive 真相层、谨慎引入 runtime evidence、独立 scanner CLI、可验证分发，以及严格 GET-only 的 App Store Connect inventory adapter。
+`v0.3.0-beta` 深化了 target/archive 真相层，谨慎引入 runtime evidence，提供独立 scanner CLI、可验证分发，以及严格 GET-only 的 App Store Connect inventory adapter。
 
 它将审计拆为源码检查、隔离 Xcode 执行、Archive 检查、运行体验和 App Store Connect 验证。它输出机器可读证据和简明的人类报告，但不会把“构建成功”当成“Apple 一定会审核通过”。
 

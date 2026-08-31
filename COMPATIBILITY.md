@@ -2,7 +2,7 @@
 
 ## Schema
 
-The `v0.3.0-beta` development tools emit schema `0.3.0`. `assemble_report.py`, eval loading, and policy-registry validation accept `0.1.0`, `0.2.0`, and `0.3.0` inputs so existing collectors can migrate incrementally. Consumers must treat unknown major schema versions as unsupported.
+The `v0.3.0-beta` tools emit schema `0.3.0`. `assemble_report.py`, eval loading, and policy-registry validation accept `0.1.0`, `0.2.0`, and `0.3.0` inputs so existing collectors can migrate incrementally. Consumers must treat unknown major schema versions as unsupported.
 
 Additive optional fields may appear in minor releases. `v0.3.0-beta` adds target-graph, archive, runtime-evidence, read-only ASC, and provenance fields while preserving prior input schemas. After the beta line stabilizes, removing or renaming fields, changing field types, tightening required fields, or redefining disposition/verification semantics requires a major schema version.
 

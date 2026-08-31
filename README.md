@@ -4,9 +4,9 @@
 
 An unofficial, evidence-driven Codex skill for auditing Apple-platform apps before App Store submission.
 
-Latest published release: `v0.2.0-beta`.
+Latest published release: `v0.3.0-beta`.
 
-Current development target on `codex/v0.3.0-beta`: deeper target/archive truth, cautious runtime evidence, a standalone scanner CLI, verified distribution, and a GET-only App Store Connect inventory adapter.
+`v0.3.0-beta` deepens target/archive truth, adds cautious runtime evidence, ships a standalone scanner CLI with verified distribution, and provides a GET-only App Store Connect inventory adapter.
 
 It separates source inspection, isolated Xcode execution, archive inspection, runtime review, and App Store Connect verification. It produces machine-readable evidence and a concise human report without treating a successful build as proof of approval.
 

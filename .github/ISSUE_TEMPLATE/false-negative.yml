@@ -5,7 +5,7 @@ labels: ["false-negative"]
 body:
   - type: input
     id: version
-    attributes: {label: Version, placeholder: v0.2.0-beta}
+    attributes: {label: Version, placeholder: v0.3.0-beta}
     validations: {required: true}
   - type: textarea
     id: missed
