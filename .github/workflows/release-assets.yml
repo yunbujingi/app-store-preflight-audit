@@ -28,7 +28,7 @@ jobs:
             --checksum-output dist/app-store-preflight-audit.zip.sha256 \
             --provenance-output dist/app-store-preflight-audit.provenance.json \
             --version "${{ github.event.release.tag_name }}"
-          python3 -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+          python3 -m pip wheel . --no-deps --wheel-dir dist
           shasum -a 256 dist/app_store_preflight_audit-*.whl > dist/app-store-preflight-audit-wheel.sha256
       - name: Upload release assets
         env:

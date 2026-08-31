@@ -43,7 +43,7 @@ jobs:
           cmp dist/app-store-preflight-audit.zip /tmp/app-store-preflight-audit-second.zip
       - name: Build and smoke-test scanner wheel
         run: |
-          python3 -m pip wheel . --no-deps --no-build-isolation --wheel-dir dist
+          python3 -m pip wheel . --no-deps --wheel-dir dist
           python3 -m venv /tmp/app-store-preflight-wheel-test
           /tmp/app-store-preflight-wheel-test/bin/pip install --no-index dist/app_store_preflight_audit-*.whl
           /tmp/app-store-preflight-wheel-test/bin/app-store-preflight-audit --version
