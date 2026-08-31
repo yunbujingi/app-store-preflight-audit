@@ -11,6 +11,7 @@ All notable changes are documented here. The project follows Semantic Versioning
 - Added deterministic per-file provenance, checksums, backed-up upgrades, one-command immutable release installation, and optional minisign verification.
 - Added a GET-only App Store Connect API adapter with an explicit field allowlist, fixed Apple origin, bounded pagination, offline fixtures, and permanent no-write/no-submit scope.
 - Advanced report schemas to `0.3.0` while retaining `0.1.0` and `0.2.0` input compatibility.
+- Added bilingual onboarding, report interpretation, Archive/IPA, CI baseline/suppression, and safe public-evidence guides, with installed-CLI smoke coverage for the documented paths.
 
 ## 0.2.0-beta - 2026-08-30
 

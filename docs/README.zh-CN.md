@@ -12,71 +12,76 @@
 
 > 本项目与 Apple Inc. 没有隶属、背书或赞助关系；不保证 App Store 审核通过，也不提供法律意见。
 
-## 包含内容
+## 从这里开始
 
-- 采用渐进式 Skill 架构，只在适用时加载对应规则和流程 reference。
-- 提供 source、build、archive 和 submission 审计模式，并显式记录覆盖状态。
-- 从 PBX phase、file-system synchronized group、workspace、SwiftPM/plugin、generated output、条件 XCConfig、可选 `xcodebuild` metadata 和 Link Map 建立稳定 target graph。
-- 分离 verification（验证状态）与 severity（严重度），避免把推断写成事实。
-- 使用隔离输出目录执行 Xcode 命令，并比较执行前后的 Git 状态。
-- 收集 Privacy Manifest 和 required-reason API 证据。
-- 支持 `.xcarchive`、导出 bundle 和受安全预算限制的 `.ipa` 检查。
-- 在不执行 App 代码的前提下检查 Mach-O、动态依赖、签名和 bundle-local required-reason 声明。
-- 检查 parent/child ID、App Clip/Watch/nested framework、版本、平台、规范化 Mach-O deployment/SDK、XCFramework slice、embedded profile、调试资源、static library 和语义化 Xcode Privacy Report 证据。
-- 输出稳定 JSON Schema、Markdown、SARIF 2.1.0 和 JUnit。
-- 使用稳定内部 ID、适用范围、fingerprint、review version 和关联 eval 建立 rule-level Apple 规则 registry。
-- 只读导入 App Store Connect export，并提供固定 Apple origin、严格 GET-only、字段 allowlist 的 API inventory adapter；App Privacy answers 仍要求用户 export。
-- 支持 baseline finding diff 和带 owner、理由、到期日、规则版本的 suppression；原始 finding 仍保留在 canonical JSON。
-- 生成显式且不修改 Simulator 的矩阵、可审阅 XCTest plan，导入截图与 `xcresult`，并对敏感场景设置授权门槛。
-- 提供可复现 fixtures、per-rule TP/TN/FP/FN 指标和零回归 CI gate。
-- 将 scanner 发布为无依赖 Python package/CLI，并提供确定性 Skill zip、per-file provenance、checksum、可恢复升级与可选 minisign 验证。
+- 第一次使用：[十分钟快速开始](quick-start.zh-CN.md)
+- 读懂结果：[理解审计报告](understanding-the-report.zh-CN.md)
+- 审计最终产物：[Archive 和 IPA recipe](recipes/archive-and-ipa-audit.zh-CN.md)
+- 接入 CI：[baseline 与 suppression recipe](recipes/ci-baseline-and-suppression.zh-CN.md)
+- 使用 `--execute` 或公开证据前：[安全执行与公开证据](safe-execution-and-public-evidence.zh-CN.md)
+- 输出示例：[合成 sample report](../examples/sample-report.md)
 
-## 安装
+## 根据现有证据选择入口
 
-在 checkout 中用一条命令安装或升级独立 scanner：
+| 输入 | 能证明什么 | 额外环境 |
+| --- | --- | --- |
+| 源码 repository | 产品信号、Privacy Manifest、target graph 线索、配置和 policy 风险。 | Python 3.9+；Xcode 可选。 |
+| `.xcarchive` | 最终 archived bundle、Mach-O、framework、entitlement/signing metadata 和 packaged manifest。 | macOS/Xcode 可提高 binary 与 signing coverage。 |
+| `.ipa` 或导出的 `.app` | 最接近提交物的 exported payload；按不可信输入读取，不启动二进制。 | Python 可跨平台；macOS 工具增加证据。 |
+| Simulator screenshot/`.xcresult` | 指定 device/OS/locale/appearance matrix 的直接 runtime evidence。 | 专用 Simulator 和 test state；自动化保持 opt-in。 |
+| App Store Connect export/API inventory | 比较 build、metadata、age rating、IAP/subscription、screenshot 和 privacy answer。 | 优先 export；API adapter 仅允许 allowlist GET。 |
+
+只有源码就从 source 开始；验证打包真相时使用计划提交的精确 `.ipa` 或 `.xcarchive`。缺失证据不会被算作通过。CLI report 只覆盖传给 `assemble` 的 fragment，因此 CI 还必须确认每个预期 collector 都已运行。
+
+## 三分钟安装
+
+在可信 checkout 中执行：
 
 ```bash
 python3 -m pip install --upgrade .
+app-store-preflight-audit --version
 ```
 
-安装后可运行 `app-store-preflight-audit --version`。Release CLI 可用一条命令下载并验证不可变 tag 对应的 Skill：
+接着按[快速开始](quick-start.zh-CN.md)执行经过测试的 source、Archive 或 GitHub Actions 路径。所有参数以 CLI `--help` 为唯一事实来源。
 
-```bash
-app-store-preflight-audit install-release --repository OWNER/app-store-preflight-audit \
-  --version v0.3.0-beta \
-  --destination-root /path/to/skills
-```
+## 第一次使用 Codex Skill
 
-默认只验证和预览；新安装添加 `--install`，升级添加 `--install --upgrade`，旧版本会保留为带时间戳的 backup。
-
-先生成并检查确定性 zip 和 checksum：
-
-```bash
-python3 skill/app-store-preflight-audit/scripts/package_skill.py \
-  --skill skill/app-store-preflight-audit --output /tmp/app-store-preflight-audit.zip \
-  --checksum-output /tmp/app-store-preflight-audit.zip.sha256 \
-  --provenance-output /tmp/app-store-preflight-audit.provenance.json
-python3 skill/app-store-preflight-audit/scripts/install_skill.py \
-  --source /tmp/app-store-preflight-audit.zip \
-  --checksum-file /tmp/app-store-preflight-audit.zip.sha256 \
-  --destination-root /path/to/skills
-```
-
-确认目标目录后再添加 `--install`；已有 Skill 默认拒绝覆盖，只有显式 `--upgrade` 才会先保留带时间戳的 backup 再替换。
-
-## 调用示例
+先只读，再渐进增加证据：
 
 ```text
-$app-store-preflight-audit 对当前工程执行 source 模式上架前审计，不修改任何项目文件。
+$app-store-preflight-audit
+
+请先执行只读 source audit。
+不要构建、运行脚本、启动 Simulator 或访问 App Store Connect。
+输出 coverage、全部 BLOCKED 项以及下一步需要提供的 evidence。
 ```
+
+已有最终产物时：
 
 ```text
-$app-store-preflight-audit 对提供的 xcarchive 执行 Archive 级隐私、SDK、Bundle 和 Entitlement 审计。
+对这个 .ipa 执行 Archive audit。
+允许读取 Mach-O metadata、Info.plist、Privacy Manifest 和签名 metadata，
+但不要执行其中的任何二进制，也不要修改签名状态。
 ```
 
-除非另行获得明确授权，Skill 不会提交 build、修改 App Store Connect metadata、购买产品、重置 Simulator 或修复发现的问题。
+## 使用方式与边界
 
-这个 beta 会交给社区验证。请分别通过 False positive、False negative、Apple rule change 和 New project shape Issue 表单反馈，并且只提交合成或完整脱敏的证据。
+| 使用方式 | 面向用户 | 职责 |
+| --- | --- | --- |
+| CLI | 开发者、CI | 确定性收集、结构化输出、输入/工具错误状态。 |
+| Codex Skill | Codex 用户 | 选择模式、组织 evidence、解释 finding 和 coverage 缺口。 |
+| Python package | 工具集成方 | 复用 scanner module 和 parser。 |
+| GitHub Actions | CI 项目 | baseline diff、canonical JSON、SARIF、JUnit 保留与 gate。 |
+
+本项目不保证 Apple 审核结果。默认 collector 不修改被审计 repository，也不执行 packaged binary。Xcode execution 默认 dry-run，并要求显式风险确认；Skill 内的 App Store Connect 永久只读。报告不能自动视为可公开——redaction 无法识别所有专有 identifier 或个人信息。
+
+当前 beta 限制：复杂 Xcode project shape 可能保持 unresolved；真实 signing/runtime/ASC coverage 取决于提供的工具和 evidence；静态 symbol match 保持 inferred；Apple 规则和 storefront exception 必须在审计时核对。
+
+## 社区验证
+
+请分别使用 [False positive](../.github/ISSUE_TEMPLATE/false-positive.yml)、[False negative](../.github/ISSUE_TEMPLATE/false-negative.yml)、[Apple rule change](../.github/ISSUE_TEMPLATE/apple-rule-change.yml) 和 [New project shape](../.github/ISSUE_TEMPLATE/new-project-shape.yml) Issue 表单。公开 report 和 artifact 可能包含私有 metadata，只能提交 synthetic 或经人工确认完整脱敏的 evidence。
+
+Skill packaging、checksum/provenance、安装和带 backup 升级命令见 [installation and packaging](../skill/app-store-preflight-audit/references/installation-and-packaging.md)。
 
 ## 开发与验证
 
@@ -89,7 +94,7 @@ python3 /path/to/quick_validate.py skill/app-store-preflight-audit
 
 测试仅使用 Python 标准库，不要求安装 Xcode。Xcode 相关执行受安全边界保护，默认只生成 dry-run 计划。
 
-更多信息请查看[示例报告](../examples/sample-report.md)、[兼容策略](../COMPATIBILITY.md)、[免责声明](../DISCLAIMER.md)、[安全策略](../SECURITY.md)和[贡献指南](../CONTRIBUTING.md)。
+更多信息请查看[文档入口](quick-start.zh-CN.md)、[兼容策略](../COMPATIBILITY.md)、[免责声明](../DISCLAIMER.md)、[安全策略](../SECURITY.md)和[贡献指南](../CONTRIBUTING.md)。
 
 ## 结论边界
 

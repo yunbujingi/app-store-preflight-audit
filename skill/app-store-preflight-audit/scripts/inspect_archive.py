@@ -38,7 +38,7 @@ PRIVACY_KEYS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--archive", required=True, type=Path, help="Path to .xcarchive or exported .app")
+    parser.add_argument("--archive", required=True, type=Path, help="Path to .xcarchive, .ipa, or exported .app")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--read-entitlements", action="store_true", help="Use codesign in read-only display mode")
     parser.add_argument("--skip-binary-tools", action="store_true", help="Skip file/lipo/otool/nm; byte-level inspection still runs")
